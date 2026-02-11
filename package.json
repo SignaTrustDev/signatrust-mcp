@@ -1,0 +1,50 @@
+{
+  "name": "@signatrustdev/mcp-server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for the SignaTrust document signing API",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "@signatrust/mcp-server": "dist/server.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "signatrust",
+    "mcp",
+    "model-context-protocol",
+    "document-signing",
+    "blockchain",
+    "ai-tools"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SignaTrustDev/Signatrust_v4.git",
+    "directory": "mcp-server"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@signatrustdev/signatrust-sdk": "^0.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "@vitest/coverage-v8": "^4.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

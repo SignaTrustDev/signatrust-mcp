@@ -1,0 +1,52 @@
+# Node
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+lib/
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+.env
+.env.*.local
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code
+.claude/
+
+# Misc
+.cache/
+.parcel-cache/
+.turbo/
+.pnp.*
+
+# Vitest / Jest
+.vitest/
+
+# Optional lockfiles (uncomment if you don't commit them)
+# package-lock.json
+# yarn.lock
