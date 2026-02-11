@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/server.js",
   "bin": {
-    "@signatrust/mcp-server": "dist/server.js"
+    "signatrust-mcp-server": "dist/server.js"
   },
   "files": [
     "dist",
@@ -31,8 +31,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SignaTrustDev/Signatrust_v4.git",
-    "directory": "mcp-server"
+    "url": "https://github.com/SignaTrustDev/signatrust-mcp.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "engines": {
     "node": ">=18"
