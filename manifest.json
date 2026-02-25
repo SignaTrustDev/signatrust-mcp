@@ -1,0 +1,25 @@
+{
+  "manifest_version": "0.3",
+  "name": "signatrust",
+  "display_name": "SignaTrust",
+  "description": "Send, sign, and verify blockchain-secured documents from Claude",
+  "version": "0.1.0",
+  "author": "SignaTrust",
+  "homepage": "https://signatrust.io",
+  "repository": "https://github.com/SignaTrustDev/signatrust-mcp",
+  "license": "MIT",
+  "runtime": "node",
+  "entry": "dist/server.js",
+  "env": [
+    {
+      "name": "SIGNATRUST_API_KEY",
+      "description": "Your SignaTrust API key (get one at https://app.signatrust.io/settings/api-keys)",
+      "required": true
+    },
+    {
+      "name": "SIGNATRUST_API_URL",
+      "description": "API base URL (defaults to https://app.signatrust.io)",
+      "required": false
+    }
+  ]
+}

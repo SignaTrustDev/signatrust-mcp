@@ -16,7 +16,6 @@ function createMockClient() {
     getTemplate: vi.fn(),
     createDocument: vi.fn(),
     verifyBlockchain: vi.fn(),
-    getEnvelopeStats: vi.fn(),
   } as unknown as SignaTrustClient & {
     listEnvelopes: ReturnType<typeof vi.fn>;
     getEnvelope: ReturnType<typeof vi.fn>;
@@ -26,7 +25,6 @@ function createMockClient() {
     getTemplate: ReturnType<typeof vi.fn>;
     createDocument: ReturnType<typeof vi.fn>;
     verifyBlockchain: ReturnType<typeof vi.fn>;
-    getEnvelopeStats: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -41,8 +39,8 @@ beforeEach(() => {
 // =============================================================================
 
 describe("TOOLS", () => {
-  it("should define all 8 tools", () => {
-    expect(TOOLS).toHaveLength(8);
+  it("should define all 7 tools", () => {
+    expect(TOOLS).toHaveLength(7);
     const names = TOOLS.map((t) => t.name);
     expect(names).toContain("list_envelopes");
     expect(names).toContain("get_envelope");
@@ -51,7 +49,6 @@ describe("TOOLS", () => {
     expect(names).toContain("list_templates");
     expect(names).toContain("create_from_template");
     expect(names).toContain("verify_blockchain");
-    expect(names).toContain("get_envelope_stats");
   });
 
   it("should have input schemas for all tools", () => {
@@ -307,30 +304,6 @@ describe("verify_blockchain", () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.verified).toBe(true);
     expect(parsed.transactionId).toBe("tx_abc");
-  });
-});
-
-// =============================================================================
-// get_envelope_stats
-// =============================================================================
-
-describe("get_envelope_stats", () => {
-  it("should call getEnvelopeStats with params", async () => {
-    client.getEnvelopeStats.mockResolvedValue({
-      waiting: 5,
-      completed: 10,
-      voided: 2,
-    });
-
-    const result = await handleTool(client, "get_envelope_stats", {
-      ownerOnly: true,
-    });
-
-    expect(client.getEnvelopeStats).toHaveBeenCalledWith({
-      ownerOnly: true,
-    });
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.waiting).toBe(5);
   });
 });
 

@@ -236,21 +236,6 @@ export const TOOLS = [
       required: ["envelopeId"],
     },
   },
-  {
-    name: "get_envelope_stats",
-    description:
-      "Get envelope count statistics: waiting (sent, pending signature), " +
-      "completed, and voided.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        ownerOnly: {
-          type: "boolean",
-          description: "Only count envelopes you own (default: false)",
-        },
-      },
-    },
-  },
 ];
 
 // =============================================================================
@@ -343,13 +328,6 @@ export async function handleTool(
       const result = await client.verifyBlockchain(
         args.envelopeId as string,
       );
-      return success(result);
-    }
-
-    case "get_envelope_stats": {
-      const result = await client.getEnvelopeStats({
-        ownerOnly: args.ownerOnly as boolean | undefined,
-      });
       return success(result);
     }
 
