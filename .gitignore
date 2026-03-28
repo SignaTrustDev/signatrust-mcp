@@ -50,3 +50,16 @@ desktop.ini
 # Optional lockfiles (uncomment if you don't commit them)
 # package-lock.json
 # yarn.lock
+# Build artifacts
+*.mcpb
+
+# Internal
+CLAUDE.md
+manifest.json.bak
+
+# Build artifacts
+*.mcpb
+
+# Internal
+CLAUDE.md
+manifest.json.bak

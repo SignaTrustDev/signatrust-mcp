@@ -1,25 +1,28 @@
 {
-  "manifest_version": "0.3",
+  "manifest_version": "0.2",
   "name": "signatrust",
   "display_name": "SignaTrust",
-  "description": "Send, sign, and verify blockchain-secured documents from Claude",
   "version": "0.1.0",
-  "author": "SignaTrust",
-  "homepage": "https://signatrust.io",
-  "repository": "https://github.com/SignaTrustDev/signatrust-mcp",
-  "license": "MIT",
-  "runtime": "node",
-  "entry": "dist/server.js",
-  "env": [
-    {
-      "name": "SIGNATRUST_API_KEY",
-      "description": "Your SignaTrust API key (get one at https://app.signatrust.io/settings/api-keys)",
-      "required": true
-    },
-    {
-      "name": "SIGNATRUST_API_URL",
-      "description": "API base URL (defaults to https://app.signatrust.io)",
-      "required": false
+  "description": "Send, sign, and verify blockchain-secured documents from Claude. Create envelopes, track signing status, manage templates, and verify Solana blockchain anchors.",
+  "author": {
+    "name": "SignaTrust",
+    "url": "https://signatrust.io"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SignaTrustDev/signatrust-mcp"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/server.js"
+      ],
+      "env": {}
     }
-  ]
+  },
+  "homepage": "https://signatrust.io",
+  "license": "MIT"
 }
