@@ -37,6 +37,11 @@ export const TOOLS = [
         },
       },
     },
+    annotations: {
+      title: "List Envelopes",
+      readOnlyHint: true,
+      destructiveHint: false,
+    },
   },
   {
     name: "get_envelope",
@@ -52,6 +57,11 @@ export const TOOLS = [
         },
       },
       required: ["id"],
+    },
+    annotations: {
+      title: "Get Envelope Details",
+      readOnlyHint: true,
+      destructiveHint: false,
     },
   },
   {
@@ -120,6 +130,11 @@ export const TOOLS = [
       },
       required: ["subject", "signers", "documentIds"],
     },
+    annotations: {
+      title: "Create Envelope",
+      readOnlyHint: false,
+      destructiveHint: false,
+    },
   },
   {
     name: "void_envelope",
@@ -140,6 +155,11 @@ export const TOOLS = [
       },
       required: ["id"],
     },
+    annotations: {
+      title: "Void Envelope",
+      readOnlyHint: false,
+      destructiveHint: true,
+    },
   },
   {
     name: "list_templates",
@@ -154,6 +174,11 @@ export const TOOLS = [
           description: "Include system-provided templates (default: true)",
         },
       },
+    },
+    annotations: {
+      title: "List Templates",
+      readOnlyHint: true,
+      destructiveHint: false,
     },
   },
   {
@@ -218,6 +243,11 @@ export const TOOLS = [
       },
       required: ["templateId", "signers"],
     },
+    annotations: {
+      title: "Create from Template",
+      readOnlyHint: false,
+      destructiveHint: false,
+    },
   },
   {
     name: "verify_blockchain",
@@ -234,6 +264,11 @@ export const TOOLS = [
         },
       },
       required: ["envelopeId"],
+    },
+    annotations: {
+      title: "Verify Blockchain Anchor",
+      readOnlyHint: true,
+      destructiveHint: false,
     },
   },
 ];
