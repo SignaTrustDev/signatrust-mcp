@@ -36,12 +36,13 @@ Add to your `claude_desktop_config.json`:
 |------|-------------|---------------|
 | `list_envelopes` | List envelopes with status filter and pagination | `envelopes:read` |
 | `get_envelope` | Get full envelope details (signers, docs, blockchain) | `envelopes:read` |
-| `create_envelope` | Create and send envelope for signing | `envelopes:write` |
-| `void_envelope` | Void an active envelope | `envelopes:write` |
+| `create_envelope` | Create and send envelope for signing. Accepts `documentIds` (after `upload_document`) or `templateId` (backend copies the template). Supports three-tier `securityLevel`. | `envelopes:write` |
 | `list_templates` | List available document templates | `templates:read` |
-| `create_from_template` | Create envelope from template (3-step) | `templates:read` + `envelopes:write` |
-| `verify_blockchain` | Verify Solana blockchain anchor | *(public)* |
-| `get_envelope_stats` | Get envelope count statistics | `envelopes:read` |
+| `upload_document` | Read a local file and upload it to SignaTrust, returning a document ID for `create_envelope` | `documents:write` |
+| `analyze_document` | Run AI contract analysis on an envelope (Gemini-powered risk/sentiment review, plan-gated) | `ai:analyze` |
+| `verify_blockchain` | Verify Solana anchor and return composite hash + file hash + explorer URL | `envelopes:read` |
+
+**Three-tier security.** `create_envelope` accepts `securityLevel`: `STANDARD` (bearer token only), `VERIFIED` (adds SMS/email OTP — recommended for employment, vendor, or healthcare consent), or `CERTIFIED` (adds WebAuthn biometric + device binding — recommended for real estate, high-value, or regulatory signings).
 
 ## API Key Scopes
 
@@ -49,10 +50,11 @@ Create an API key at **Settings > API Keys** in your SignaTrust dashboard. Assig
 
 | Scope | Tools Enabled |
 |-------|--------------|
-| `envelopes:read` | list_envelopes, get_envelope, get_envelope_stats |
-| `envelopes:write` | create_envelope, void_envelope |
-| `templates:read` | list_templates, create_from_template |
-| `documents:write` | create_from_template (document creation step) |
+| `envelopes:read` | list_envelopes, get_envelope, verify_blockchain |
+| `envelopes:write` | create_envelope |
+| `templates:read` | list_templates |
+| `documents:write` | upload_document |
+| `ai:analyze` | analyze_document |
 
 ## Environment Variables
 
@@ -66,16 +68,12 @@ Create an API key at **Settings > API Keys** in your SignaTrust dashboard. Assig
 Once connected, you can ask your AI assistant things like:
 
 - "List all my pending envelopes"
-- "Send an NDA to alice@example.com for signing"
-- "Check the blockchain verification for envelope env_abc123"
-- "Void envelope env_xyz because we sent the wrong document"
-- "Show me available templates"
-- "Create a lease agreement from template for John Doe"
-- "How many envelopes have been completed this month?"
+- "Upload ~/Documents/nda.pdf and send it to alice@example.com with VERIFIED security"
+- "Show me available templates, then create a lease agreement from the residential template for John Doe"
+- "Check the blockchain verification for envelope env_abc123 and show me the composite hash"
+- "Run AI analysis on envelope env_xyz — I want to know if there are any risky clauses before the signer reviews it"
 
 ## Development
-
-Internal `@signatrustdev/*` packages are hosted on [GitHub Packages](https://github.com/orgs/SignaTrustDev/packages). Authentication is configured via `.npmrc` and requires a `NODE_AUTH_TOKEN` with `read:packages` scope.
 
 ```bash
 # Install dependencies

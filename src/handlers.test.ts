@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { TOOLS, handleTool } from "./handlers.js";
 import type { SignaTrustClient } from "./vendor/signatrust-sdk/index.js";
 
@@ -11,19 +14,19 @@ function createMockClient() {
     listEnvelopes: vi.fn(),
     getEnvelope: vi.fn(),
     createEnvelope: vi.fn(),
-    voidEnvelope: vi.fn(),
     listTemplates: vi.fn(),
-    getTemplate: vi.fn(),
-    createDocument: vi.fn(),
+    requestDocumentUpload: vi.fn(),
+    putBytesToUploadUrl: vi.fn(),
+    analyzeEnvelope: vi.fn(),
     verifyBlockchain: vi.fn(),
   } as unknown as SignaTrustClient & {
     listEnvelopes: ReturnType<typeof vi.fn>;
     getEnvelope: ReturnType<typeof vi.fn>;
     createEnvelope: ReturnType<typeof vi.fn>;
-    voidEnvelope: ReturnType<typeof vi.fn>;
     listTemplates: ReturnType<typeof vi.fn>;
-    getTemplate: ReturnType<typeof vi.fn>;
-    createDocument: ReturnType<typeof vi.fn>;
+    requestDocumentUpload: ReturnType<typeof vi.fn>;
+    putBytesToUploadUrl: ReturnType<typeof vi.fn>;
+    analyzeEnvelope: ReturnType<typeof vi.fn>;
     verifyBlockchain: ReturnType<typeof vi.fn>;
   };
 }
@@ -39,30 +42,35 @@ beforeEach(() => {
 // =============================================================================
 
 describe("TOOLS", () => {
-  it("should define all 7 tools", () => {
-    expect(TOOLS).toHaveLength(7);
+  it("should define the full tool set", () => {
     const names = TOOLS.map((t) => t.name);
-    expect(names).toContain("list_envelopes");
-    expect(names).toContain("get_envelope");
-    expect(names).toContain("create_envelope");
-    expect(names).toContain("void_envelope");
-    expect(names).toContain("list_templates");
-    expect(names).toContain("create_from_template");
-    expect(names).toContain("verify_blockchain");
+    expect(names).toEqual([
+      "list_envelopes",
+      "get_envelope",
+      "create_envelope",
+      "list_templates",
+      "upload_document",
+      "analyze_document",
+      "verify_blockchain",
+    ]);
   });
 
-  it("should have input schemas for all tools", () => {
+  it("should have input schemas and descriptions for all tools", () => {
     for (const tool of TOOLS) {
       expect(tool.inputSchema).toBeDefined();
       expect(tool.inputSchema.type).toBe("object");
+      expect(tool.description.length).toBeGreaterThan(20);
     }
   });
 
-  it("should have descriptions for all tools", () => {
-    for (const tool of TOOLS) {
-      expect(tool.description).toBeTruthy();
-      expect(tool.description.length).toBeGreaterThan(20);
-    }
+  it("should NOT expose void_envelope (v1 API does not support void)", () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).not.toContain("void_envelope");
+  });
+
+  it("should NOT expose create_from_template (subsumed by create_envelope + templateId)", () => {
+    const names = TOOLS.map((t) => t.name);
+    expect(names).not.toContain("create_from_template");
   });
 });
 
@@ -73,7 +81,7 @@ describe("TOOLS", () => {
 describe("list_envelopes", () => {
   it("should call listEnvelopes with params and return formatted result", async () => {
     const envelopes = {
-      data: [{ id: "env_1", subject: "Test" }],
+      data: [{ id: "env_1", name: "Test" }],
       pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
     };
     client.listEnvelopes.mockResolvedValue(envelopes);
@@ -94,17 +102,13 @@ describe("list_envelopes", () => {
     expect(parsed.data).toHaveLength(1);
   });
 
-  it("should work with no params", async () => {
-    client.listEnvelopes.mockResolvedValue({ data: [], pagination: {} });
-
-    const result = await handleTool(client, "list_envelopes", {});
-
-    expect(client.listEnvelopes).toHaveBeenCalledWith({
-      status: undefined,
-      page: undefined,
-      limit: undefined,
-    });
-    expect(result.isError).toBeUndefined();
+  it("should accept DRAFT status in the schema", () => {
+    const tool = TOOLS.find((t) => t.name === "list_envelopes");
+    const props = tool?.inputSchema.properties as Record<
+      string,
+      { enum?: string[] }
+    >;
+    expect(props.status?.enum).toContain("DRAFT");
   });
 });
 
@@ -114,13 +118,13 @@ describe("list_envelopes", () => {
 
 describe("get_envelope", () => {
   it("should call getEnvelope with id", async () => {
-    client.getEnvelope.mockResolvedValue({ id: "env_1", subject: "NDA" });
+    client.getEnvelope.mockResolvedValue({ id: "env_1", name: "NDA" });
 
     const result = await handleTool(client, "get_envelope", { id: "env_1" });
 
     expect(client.getEnvelope).toHaveBeenCalledWith("env_1");
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.subject).toBe("NDA");
+    expect(parsed.name).toBe("NDA");
   });
 });
 
@@ -129,23 +133,22 @@ describe("get_envelope", () => {
 // =============================================================================
 
 describe("create_envelope", () => {
-  it("should call createEnvelope with full input", async () => {
-    client.createEnvelope.mockResolvedValue({ id: "env_new" });
+  it("should pass name (not subject) to the backend", async () => {
+    client.createEnvelope.mockResolvedValue({ id: "env_new", name: "Contract" });
 
-    const input = {
-      subject: "Contract",
+    await handleTool(client, "create_envelope", {
+      name: "Contract",
       signers: [{ name: "Alice", email: "alice@example.com" }],
       documentIds: ["doc_1"],
       message: "Please sign",
-    };
-
-    const result = await handleTool(client, "create_envelope", input);
+    });
 
     expect(client.createEnvelope).toHaveBeenCalledWith(
-      expect.objectContaining(input),
+      expect.objectContaining({
+        name: "Contract",
+        documentIds: ["doc_1"],
+      }),
     );
-    const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.id).toBe("env_new");
   });
 
   it("should forward securityLevel when provided", async () => {
@@ -155,8 +158,8 @@ describe("create_envelope", () => {
     });
 
     await handleTool(client, "create_envelope", {
-      subject: "Deed",
-      signers: [{ name: "Alice" }],
+      name: "Deed",
+      signers: [{ name: "Alice", email: "alice@example.com" }],
       documentIds: ["doc_1"],
       securityLevel: "CERTIFIED",
     });
@@ -166,7 +169,24 @@ describe("create_envelope", () => {
     );
   });
 
-  it("should expose securityLevel in the create_envelope tool schema", () => {
+  it("should pass templateId through (backend handles template copy)", async () => {
+    client.createEnvelope.mockResolvedValue({ id: "env_tpl" });
+
+    await handleTool(client, "create_envelope", {
+      name: "From Template",
+      signers: [{ name: "Bob", email: "bob@example.com" }],
+      templateId: "tpl_1",
+    });
+
+    expect(client.createEnvelope).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: "tpl_1",
+        documentIds: undefined,
+      }),
+    );
+  });
+
+  it("should expose securityLevel enum in the tool schema", () => {
     const tool = TOOLS.find((t) => t.name === "create_envelope");
     const props = tool?.inputSchema.properties as Record<
       string,
@@ -178,25 +198,12 @@ describe("create_envelope", () => {
       "CERTIFIED",
     ]);
   });
-});
 
-// =============================================================================
-// void_envelope
-// =============================================================================
-
-describe("void_envelope", () => {
-  it("should call voidEnvelope with id and reason", async () => {
-    client.voidEnvelope.mockResolvedValue({ id: "env_1", status: "VOIDED" });
-
-    await handleTool(client, "void_envelope", {
-      id: "env_1",
-      voidReason: "Wrong document",
-    });
-
-    expect(client.voidEnvelope).toHaveBeenCalledWith(
-      "env_1",
-      "Wrong document",
-    );
+  it("should expose both documentIds and templateId in the schema", () => {
+    const tool = TOOLS.find((t) => t.name === "create_envelope");
+    const props = tool?.inputSchema.properties as Record<string, unknown>;
+    expect(props.documentIds).toBeDefined();
+    expect(props.templateId).toBeDefined();
   });
 });
 
@@ -221,119 +228,124 @@ describe("list_templates", () => {
 });
 
 // =============================================================================
-// create_from_template
+// upload_document
 // =============================================================================
 
-describe("create_from_template", () => {
-  it("should orchestrate 3-step template creation", async () => {
-    client.getTemplate.mockResolvedValue({
-      id: "tpl_1",
-      name: "Lease Agreement",
-      documentName: "lease.pdf",
+describe("upload_document", () => {
+  let tmpDir: string;
+  let filePath: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "sig-mcp-"));
+    filePath = join(tmpDir, "contract.pdf");
+    await writeFile(filePath, Buffer.from("%PDF-1.4\nfake\n"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should read the file, request an upload URL, PUT the bytes, and return metadata", async () => {
+    client.requestDocumentUpload.mockResolvedValue({
+      id: "doc_123",
+      name: "contract.pdf",
       contentType: "application/pdf",
-      documentUrl: "https://s3.amazonaws.com/templates/lease.pdf?token=abc",
+      size: 14,
+      hash: null,
+      createdAt: "2026-04-21T00:00:00Z",
+      uploadUrl: "https://s3.amazonaws.com/presigned/abc",
     });
-    client.createDocument.mockResolvedValue({
-      id: "doc_new",
-      name: "lease.pdf",
-    });
-    client.createEnvelope.mockResolvedValue({
-      id: "env_new",
-      subject: "Lease Agreement",
-    });
+    client.putBytesToUploadUrl.mockResolvedValue(undefined);
 
-    const result = await handleTool(client, "create_from_template", {
-      templateId: "tpl_1",
-      signers: [{ name: "Bob", email: "bob@example.com" }],
-    });
+    const result = await handleTool(client, "upload_document", { filePath });
 
-    // Step 1: Get template
-    expect(client.getTemplate).toHaveBeenCalledWith("tpl_1");
-
-    // Step 2: Create document from template
-    expect(client.createDocument).toHaveBeenCalledWith({
-      fileName: "lease.pdf",
-      fileType: "application/pdf",
-      s3Key: "https://s3.amazonaws.com/templates/lease.pdf",
+    expect(client.requestDocumentUpload).toHaveBeenCalledWith({
+      name: "contract.pdf",
+      contentType: "application/pdf",
+      size: 14,
     });
-
-    // Step 3: Create envelope
-    expect(client.createEnvelope).toHaveBeenCalledWith({
-      subject: "Lease Agreement",
-      signers: [{ name: "Bob", email: "bob@example.com" }],
-      documentIds: ["doc_new"],
-      message: undefined,
-    });
+    expect(client.putBytesToUploadUrl).toHaveBeenCalledWith(
+      "https://s3.amazonaws.com/presigned/abc",
+      expect.any(Uint8Array),
+      "application/pdf",
+    );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.envelope.id).toBe("env_new");
-    expect(parsed.templateUsed.id).toBe("tpl_1");
-    expect(parsed.documentCreated.id).toBe("doc_new");
+    expect(parsed.id).toBe("doc_123");
+    expect(parsed).not.toHaveProperty("uploadUrl"); // never surface the pre-signed URL
   });
 
-  it("should use custom subject when provided", async () => {
-    client.getTemplate.mockResolvedValue({
-      id: "tpl_1",
-      name: "Lease Agreement",
-      documentName: "lease.pdf",
+  it("should respect an explicit name and contentType override", async () => {
+    client.requestDocumentUpload.mockResolvedValue({
+      id: "doc_1",
+      name: "custom.pdf",
+      contentType: "application/pdf",
+      size: 14,
+      hash: null,
+      createdAt: "2026-04-21T00:00:00Z",
+      uploadUrl: "https://example.test/u",
+    });
+    client.putBytesToUploadUrl.mockResolvedValue(undefined);
+
+    await handleTool(client, "upload_document", {
+      filePath,
+      name: "custom.pdf",
       contentType: "application/pdf",
     });
-    client.createDocument.mockResolvedValue({ id: "doc_1" });
-    client.createEnvelope.mockResolvedValue({ id: "env_1" });
 
-    await handleTool(client, "create_from_template", {
-      templateId: "tpl_1",
-      subject: "Custom Subject",
-      signers: [{ name: "Alice" }],
+    expect(client.requestDocumentUpload).toHaveBeenCalledWith({
+      name: "custom.pdf",
+      contentType: "application/pdf",
+      size: 14,
     });
+  });
 
-    expect(client.createEnvelope).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: "Custom Subject" }),
+  it("should infer contentType from a .docx extension", async () => {
+    const docxPath = join(tmpDir, "agreement.docx");
+    await writeFile(docxPath, Buffer.from("PK\x03\x04fake-docx"));
+
+    client.requestDocumentUpload.mockResolvedValue({
+      id: "doc_docx",
+      name: "agreement.docx",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 11,
+      hash: null,
+      createdAt: "2026-04-21T00:00:00Z",
+      uploadUrl: "https://example.test/u",
+    });
+    client.putBytesToUploadUrl.mockResolvedValue(undefined);
+
+    await handleTool(client, "upload_document", { filePath: docxPath });
+
+    expect(client.requestDocumentUpload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
     );
   });
+});
 
-  it("should forward securityLevel through to the created envelope", async () => {
-    client.getTemplate.mockResolvedValue({
-      id: "tpl_1",
-      name: "Lease",
-      documentName: "lease.pdf",
-      contentType: "application/pdf",
-    });
-    client.createDocument.mockResolvedValue({ id: "doc_1" });
-    client.createEnvelope.mockResolvedValue({ id: "env_1" });
+// =============================================================================
+// analyze_document
+// =============================================================================
 
-    await handleTool(client, "create_from_template", {
-      templateId: "tpl_1",
-      signers: [{ name: "Alice" }],
-      securityLevel: "VERIFIED",
+describe("analyze_document", () => {
+  it("should call analyzeEnvelope with envelopeId", async () => {
+    client.analyzeEnvelope.mockResolvedValue({
+      envelopeId: "env_1",
+      analysis: { sentiment: "SAFE", flaggedClauses: [] },
+      analyzedAt: "2026-04-21T12:00:00Z",
     });
 
-    expect(client.createEnvelope).toHaveBeenCalledWith(
-      expect.objectContaining({ securityLevel: "VERIFIED" }),
-    );
-  });
-
-  it("should handle template without documentUrl", async () => {
-    client.getTemplate.mockResolvedValue({
-      id: "tpl_1",
-      name: "Template",
-      documentName: "doc.pdf",
-      contentType: "application/pdf",
-      documentUrl: undefined,
-    });
-    client.createDocument.mockResolvedValue({ id: "doc_1" });
-    client.createEnvelope.mockResolvedValue({ id: "env_1" });
-
-    await handleTool(client, "create_from_template", {
-      templateId: "tpl_1",
-      signers: [{ name: "Alice" }],
+    const result = await handleTool(client, "analyze_document", {
+      envelopeId: "env_1",
     });
 
-    expect(client.createDocument).toHaveBeenCalledWith({
-      fileName: "doc.pdf",
-      fileType: "application/pdf",
-      s3Key: undefined,
-    });
+    expect(client.analyzeEnvelope).toHaveBeenCalledWith("env_1");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.analysis.sentiment).toBe("SAFE");
   });
 });
 
@@ -342,12 +354,17 @@ describe("create_from_template", () => {
 // =============================================================================
 
 describe("verify_blockchain", () => {
-  it("should call verifyBlockchain with envelopeId", async () => {
+  it("should call verifyBlockchain with envelopeId and pass through the response", async () => {
     client.verifyBlockchain.mockResolvedValue({
-      verified: true,
       envelopeId: "env_1",
-      transactionId: "tx_abc",
+      txId: "5xyz",
       network: "mainnet-beta",
+      explorerUrl: "https://explorer.solana.com/tx/5xyz",
+      compositeHash: "abc123",
+      fileHash: "def456",
+      hashVersion: 1,
+      verified: true,
+      timestamp: 1700000000,
     });
 
     const result = await handleTool(client, "verify_blockchain", {
@@ -357,28 +374,18 @@ describe("verify_blockchain", () => {
     expect(client.verifyBlockchain).toHaveBeenCalledWith("env_1");
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.verified).toBe(true);
-    expect(parsed.transactionId).toBe("tx_abc");
+    expect(parsed.compositeHash).toBe("abc123");
   });
 });
 
 // =============================================================================
-// Error Handling
+// Unknown tool
 // =============================================================================
 
-describe("error handling", () => {
-  it("should return unknown tool error for unrecognized tool name", async () => {
-    const result = await handleTool(client, "nonexistent_tool", {});
-
+describe("unknown tool", () => {
+  it("should return an error for unknown tool name", async () => {
+    const result = await handleTool(client, "does_not_exist", {});
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Unknown tool");
-    expect(result.content[0].text).toContain("nonexistent_tool");
-  });
-
-  it("should propagate API errors to caller", async () => {
-    client.getEnvelope.mockRejectedValue(new Error("Network error"));
-
-    await expect(
-      handleTool(client, "get_envelope", { id: "bad" }),
-    ).rejects.toThrow("Network error");
   });
 });

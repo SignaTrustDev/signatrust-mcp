@@ -1,17 +1,18 @@
 /**
- * HTTP client for the SignaTrust REST API.
+ * HTTP client for the SignaTrust REST API (v1).
  *
  * Vendored from @signatrustdev/signatrust-sdk. Uses native fetch() (Node 18+)
  * with API key authentication via x-api-key header. All methods return typed
- * responses or throw on non-2xx status.
+ * responses or throw ApiError on non-2xx status.
  */
 
 import type {
   EnvelopeDetail,
   CreateEnvelopeInput,
-  CreateDocumentResponse,
   TemplateResponse,
   VerificationResponse,
+  AnalysisResponse,
+  DocumentUploadResponse,
   PaginatedResponse,
   ProblemDetails,
 } from "./types.js";
@@ -133,18 +134,6 @@ export class SignaTrustClient {
     return data;
   }
 
-  async voidEnvelope(
-    id: string,
-    voidReason?: string,
-  ): Promise<EnvelopeDetail> {
-    const { data } = await this.request<EnvelopeDetail>(
-      "PATCH",
-      `/api/v1/envelopes/${id}`,
-      { body: { status: "VOIDED", voidReason } },
-    );
-    return data;
-  }
-
   async listTemplates(params?: {
     includeSystem?: boolean;
   }): Promise<TemplateResponse[]> {
@@ -156,31 +145,63 @@ export class SignaTrustClient {
     return data;
   }
 
-  async getTemplate(id: string): Promise<TemplateResponse> {
-    const { data } = await this.request<TemplateResponse>(
-      "GET",
-      `/api/v1/templates/${id}`,
+  /**
+   * Request a pre-signed upload URL for a new document.
+   * After this returns, PUT the file bytes to `uploadUrl` with the given
+   * Content-Type header, then use the returned `id` when creating an envelope.
+   */
+  async requestDocumentUpload(input: {
+    name: string;
+    contentType: string;
+    size: number;
+  }): Promise<DocumentUploadResponse> {
+    const { data } = await this.request<DocumentUploadResponse>(
+      "POST",
+      "/api/v1/documents/upload",
+      { body: input },
     );
     return data;
   }
 
-  async createDocument(input: {
-    fileName: string;
-    fileType: string;
-    s3Key?: string;
-  }): Promise<CreateDocumentResponse> {
-    const { data } = await this.request<CreateDocumentResponse>(
-      "POST",
-      "/api/v1/documents",
-      { body: input },
-    );
-    return data;
+  /**
+   * Upload file bytes to a pre-signed S3 URL obtained from requestDocumentUpload.
+   * Does not use the API key — the pre-signed URL carries its own auth.
+   */
+  async putBytesToUploadUrl(
+    uploadUrl: string,
+    bytes: Uint8Array,
+    contentType: string,
+  ): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: bytes,
+    });
+    if (!response.ok) {
+      throw new ApiError(
+        response.status,
+        `Pre-signed upload failed: ${response.statusText}`,
+        null,
+      );
+    }
   }
 
   async verifyBlockchain(envelopeId: string): Promise<VerificationResponse> {
     const { data } = await this.request<VerificationResponse>(
       "GET",
       `/api/v1/envelopes/${envelopeId}/blockchain`,
+    );
+    return data;
+  }
+
+  /**
+   * Trigger AI contract analysis on an envelope's document.
+   * Plan-gated: Free plan returns 403.
+   */
+  async analyzeEnvelope(envelopeId: string): Promise<AnalysisResponse> {
+    const { data } = await this.request<AnalysisResponse>(
+      "POST",
+      `/api/v1/envelopes/${envelopeId}/analyze`,
     );
     return data;
   }

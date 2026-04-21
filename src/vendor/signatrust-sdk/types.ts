@@ -1,8 +1,10 @@
 /**
- * Standalone type definitions for the SignaTrust API.
+ * Standalone type definitions for the SignaTrust public API (v1).
  *
- * Vendored from @signatrustdev/signatrust-sdk so this package has no
- * external runtime dependencies beyond @modelcontextprotocol/sdk.
+ * Vendored from @signatrustdev/signatrust-sdk and corrected to match the
+ * actual backend response shapes in signatrust_new/src/types/api-v1.ts.
+ * This package has no external runtime dependencies beyond
+ * @modelcontextprotocol/sdk.
  */
 
 // =============================================================================
@@ -10,6 +12,7 @@
 // =============================================================================
 
 export type EnvelopeStatus =
+  | "DRAFT"
   | "SENT"
   | "NEEDS_SIGNATURE"
   | "COMPLETED"
@@ -57,6 +60,8 @@ export interface PaginationMeta {
   limit: number;
   total: number;
   totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -77,52 +82,71 @@ export interface EnvelopeSigner {
   status: SignerStatus;
   routingOrder: number;
   deliveryMethod: DeliveryMethod;
-  signedAt?: string | null;
+  signedAt: string | null;
+  viewedAt: string | null;
+  declinedAt: string | null;
 }
 
 export interface EnvelopeDocument {
   id: string;
   name: string;
-  s3Key: string;
-  mimeType: string;
+  contentType: string;
+  size: number;
   hash: string | null;
-  url?: string;
+  createdAt: string;
 }
 
+/**
+ * Envelope shape returned by list / get / create / update.
+ * Matches V1EnvelopeDetailResponse in the backend.
+ */
 export interface EnvelopeDetail {
   id: string;
-  subject: string;
+  name: string;
   status: EnvelopeStatus;
   securityLevel?: SecurityLevel;
-  senderEmail: string;
-  senderName: string | null;
+  message: string | null;
   createdAt: string;
   updatedAt: string;
-  blockchainTxId: string | null;
-  blockchainNetwork: string | null;
-  blockchainExplorerUrl: string | null;
-  signers: EnvelopeSigner[];
+  sentAt: string | null;
+  completedAt: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  blockchain: {
+    txId: string | null;
+    network: string | null;
+    explorerUrl: string | null;
+    timestamp: string | null;
+  };
   documents: EnvelopeDocument[];
+  signers: EnvelopeSigner[];
 }
 
 // =============================================================================
 // Template
 // =============================================================================
 
+export interface SignerRoleDef {
+  role: string;
+  order: number;
+  action: string;
+}
+
+/**
+ * Template summary returned by GET /api/v1/templates (list).
+ */
 export interface TemplateResponse {
   id: string;
   name: string;
   description: string | null;
   category: string | null;
-  documentName: string;
-  documentUrl?: string;
+  vertical: string | null;
+  tags: string[];
   contentType: string;
-  fields: unknown | null;
-  signerRoles: unknown | null;
+  fieldCount: number;
+  signerRoles: SignerRoleDef[];
+  featured: boolean;
   isSystem: boolean;
-  userId: string | null;
-  ownerName: string | null;
-  ownerEmail: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -131,17 +155,18 @@ export interface TemplateResponse {
 // Document
 // =============================================================================
 
-export interface CreateDocumentResponse {
+/**
+ * Response from POST /api/v1/documents/upload.
+ * Caller PUTs file bytes to uploadUrl before using the document in an envelope.
+ */
+export interface DocumentUploadResponse {
   id: string;
   name: string;
-  s3Key: string;
   contentType: string;
   size: number;
   hash: string | null;
-  envelopeId: string | null;
   createdAt: string;
-  uploadUrl?: string;
-  url?: string;
+  uploadUrl: string;
 }
 
 // =============================================================================
@@ -161,9 +186,22 @@ export interface VerificationResponse {
   explorerUrl: string | null;
   compositeHash: string | null;
   fileHash: string | null;
-  hashVersion: string | null;
+  hashVersion: number | null;
   verified: boolean;
   timestamp: number | null;
+}
+
+// =============================================================================
+// AI Analysis
+// =============================================================================
+
+/**
+ * Response from POST /api/v1/envelopes/{id}/analyze.
+ */
+export interface AnalysisResponse {
+  envelopeId: string;
+  analysis: Record<string, unknown> | null;
+  analyzedAt: string | null;
 }
 
 // =============================================================================
@@ -179,10 +217,19 @@ export interface CreateEnvelopeSigner {
   deliveryMethod?: DeliveryMethod;
 }
 
+/**
+ * Body for POST /api/v1/envelopes.
+ *
+ * Two modes:
+ *   - Standard: supply `name`, `signers`, `documentIds`.
+ *   - Template: supply `name` (optional, defaults to template name), `signers`,
+ *     and `templateId`. Backend copies the template's document server-side.
+ */
 export interface CreateEnvelopeInput {
-  subject: string;
+  name: string;
   signers: CreateEnvelopeSigner[];
-  documentIds: string[];
+  documentIds?: string[];
+  templateId?: string;
   message?: string;
   securityLevel?: SecurityLevel;
 }
