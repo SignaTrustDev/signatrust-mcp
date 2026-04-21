@@ -20,7 +20,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SignaTrustClient, ApiError } from "@signatrustdev/signatrust-sdk";
+import { SignaTrustClient, ApiError } from "./vendor/signatrust-sdk/index.js";
 import { formatApiError } from "./errors.js";
 import { TOOLS, handleTool } from "./handlers.js";
 

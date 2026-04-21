@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TOOLS, handleTool } from "./handlers.js";
-import type { SignaTrustClient } from "@signatrustdev/signatrust-sdk";
+import type { SignaTrustClient } from "./vendor/signatrust-sdk/index.js";
 
 // =============================================================================
 // Mock Client
@@ -141,9 +141,42 @@ describe("create_envelope", () => {
 
     const result = await handleTool(client, "create_envelope", input);
 
-    expect(client.createEnvelope).toHaveBeenCalledWith(input);
+    expect(client.createEnvelope).toHaveBeenCalledWith(
+      expect.objectContaining(input),
+    );
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.id).toBe("env_new");
+  });
+
+  it("should forward securityLevel when provided", async () => {
+    client.createEnvelope.mockResolvedValue({
+      id: "env_new",
+      securityLevel: "CERTIFIED",
+    });
+
+    await handleTool(client, "create_envelope", {
+      subject: "Deed",
+      signers: [{ name: "Alice" }],
+      documentIds: ["doc_1"],
+      securityLevel: "CERTIFIED",
+    });
+
+    expect(client.createEnvelope).toHaveBeenCalledWith(
+      expect.objectContaining({ securityLevel: "CERTIFIED" }),
+    );
+  });
+
+  it("should expose securityLevel in the create_envelope tool schema", () => {
+    const tool = TOOLS.find((t) => t.name === "create_envelope");
+    const props = tool?.inputSchema.properties as Record<
+      string,
+      { enum?: string[] }
+    >;
+    expect(props.securityLevel?.enum).toEqual([
+      "STANDARD",
+      "VERIFIED",
+      "CERTIFIED",
+    ]);
   });
 });
 
@@ -256,6 +289,27 @@ describe("create_from_template", () => {
 
     expect(client.createEnvelope).toHaveBeenCalledWith(
       expect.objectContaining({ subject: "Custom Subject" }),
+    );
+  });
+
+  it("should forward securityLevel through to the created envelope", async () => {
+    client.getTemplate.mockResolvedValue({
+      id: "tpl_1",
+      name: "Lease",
+      documentName: "lease.pdf",
+      contentType: "application/pdf",
+    });
+    client.createDocument.mockResolvedValue({ id: "doc_1" });
+    client.createEnvelope.mockResolvedValue({ id: "env_1" });
+
+    await handleTool(client, "create_from_template", {
+      templateId: "tpl_1",
+      signers: [{ name: "Alice" }],
+      securityLevel: "VERIFIED",
+    });
+
+    expect(client.createEnvelope).toHaveBeenCalledWith(
+      expect.objectContaining({ securityLevel: "VERIFIED" }),
     );
   });
 

@@ -101,10 +101,12 @@ SIGNATRUST_API_KEY=sk_live_xxx SIGNATRUST_API_URL=http://localhost:3000 node dis
 
 ```
 src/
-  server.ts          # Entry point — env validation, MCP server setup, stdio transport
-  handlers.ts        # Tool definitions and handler dispatch (testable)
-  errors.ts          # RFC 7807 ProblemDetails -> MCP tool error mapping
-  *.test.ts          # Co-located test files
+  server.ts                      # Entry point — env validation, MCP server setup, stdio transport
+  handlers.ts                    # Tool definitions and handler dispatch (testable)
+  errors.ts                      # RFC 7807 ProblemDetails -> MCP tool error mapping
+  vendor/signatrust-sdk/         # Vendored HTTP client + types (zero external runtime deps)
+  *.test.ts                      # Co-located test files
 ```
 
-The HTTP client and API types come from [`@signatrustdev/signatrust-sdk`](https://www.npmjs.com/package/@signatrustdev/signatrust-sdk).
+The HTTP client and API types are vendored under `src/vendor/signatrust-sdk/` so
+this package has no external runtime dependencies beyond `@modelcontextprotocol/sdk`.

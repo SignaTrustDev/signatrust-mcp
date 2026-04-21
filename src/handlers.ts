@@ -5,7 +5,7 @@
  * rather than instantiated at module level.
  */
 
-import type { SignaTrustClient, CreateEnvelopeSigner } from "@signatrustdev/signatrust-sdk";
+import type { SignaTrustClient, CreateEnvelopeSigner } from "./vendor/signatrust-sdk/index.js";
 
 // =============================================================================
 // Tool Definitions
@@ -68,13 +68,29 @@ export const TOOLS = [
     name: "create_envelope",
     description:
       "Create and send a new envelope for signing. Requires at least one signer " +
-      "and one document. Signers are notified via their specified delivery method.",
+      "and one document. Signers are notified via their specified delivery method. " +
+      "Use the securityLevel parameter to match the legal weight required: STANDARD " +
+      "for routine/internal approvals; VERIFIED (adds SMS/email OTP) for employment, " +
+      "vendor, or healthcare consent; CERTIFIED (adds WebAuthn biometric + device " +
+      "binding) for real estate, high-value, or regulatory signings.",
     inputSchema: {
       type: "object" as const,
       properties: {
         subject: {
           type: "string",
           description: "Envelope subject/title shown to signers",
+        },
+        securityLevel: {
+          type: "string",
+          enum: ["STANDARD", "VERIFIED", "CERTIFIED"],
+          description:
+            "Signing ceremony tier. STANDARD = bearer-token only (default, " +
+            "legally weakest — vulnerable to link-forwarding disputes). VERIFIED = " +
+            "STANDARD + SMS/email OTP (defeats link forwarding; suitable for " +
+            "employment contracts, vendor agreements, healthcare consent). " +
+            "CERTIFIED = VERIFIED + WebAuthn biometric on a device-bound credential " +
+            "(near-unrepudiable; suitable for real estate, high-value transactions, " +
+            "regulated industries). All tiers are included on every plan.",
         },
         signers: {
           type: "array",
@@ -186,7 +202,8 @@ export const TOOLS = [
     description:
       "Create a new envelope from a template. This is a 3-step operation: " +
       "fetches the template, creates a document copy, then creates the envelope. " +
-      "Use list_templates to find available template IDs.",
+      "Use list_templates to find available template IDs. Pick securityLevel to " +
+      "match the legal weight required (see create_envelope for tier guidance).",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -197,6 +214,13 @@ export const TOOLS = [
         subject: {
           type: "string",
           description: "Envelope subject (defaults to template name)",
+        },
+        securityLevel: {
+          type: "string",
+          enum: ["STANDARD", "VERIFIED", "CERTIFIED"],
+          description:
+            "Signing ceremony tier (default STANDARD). See create_envelope for " +
+            "guidance on when to use VERIFIED or CERTIFIED.",
         },
         signers: {
           type: "array",
@@ -252,9 +276,13 @@ export const TOOLS = [
   {
     name: "verify_blockchain",
     description:
-      "Verify a completed envelope's blockchain anchor on Solana. " +
-      "Returns the transaction ID, network, timestamp, and explorer URL " +
-      "providing cryptographic proof of when the document was signed.",
+      "Verify a completed envelope's Solana anchor. Returns the composite hash " +
+      "(SHA-256 binding the final PDF, signer metadata, and the hash-chained " +
+      "audit trail), the file hash, the Solana transaction ID, and an explorer " +
+      "URL. Because the composite hash is anchored to Solana, any modification " +
+      "to the document, signer records, or audit trail would break the hash " +
+      "chain and fail verification. This is the proof that makes the envelope " +
+      "independently verifiable without SignaTrust.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -314,6 +342,11 @@ export async function handleTool(
         signers: args.signers as CreateEnvelopeSigner[],
         documentIds: args.documentIds as string[],
         message: args.message as string | undefined,
+        securityLevel: args.securityLevel as
+          | "STANDARD"
+          | "VERIFIED"
+          | "CERTIFIED"
+          | undefined,
       });
       return success(result);
     }
@@ -350,6 +383,11 @@ export async function handleTool(
         signers: args.signers as CreateEnvelopeSigner[],
         documentIds: [document.id],
         message: args.message as string | undefined,
+        securityLevel: args.securityLevel as
+          | "STANDARD"
+          | "VERIFIED"
+          | "CERTIFIED"
+          | undefined,
       });
 
       return success({
