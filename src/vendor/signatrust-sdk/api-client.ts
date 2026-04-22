@@ -186,6 +186,25 @@ export class SignaTrustClient {
     }
   }
 
+  /**
+   * Void an in-progress envelope. Sets status to VOIDED, notifies signers
+   * with a cancellation notice, writes an ENVELOPE_VOIDED audit event, and
+   * dispatches an `envelope.voided` webhook.
+   *
+   * Fails with 400 if the envelope is already COMPLETED or already VOIDED.
+   */
+  async voidEnvelope(
+    envelopeId: string,
+    reason?: string,
+  ): Promise<EnvelopeDetail> {
+    const { data } = await this.request<EnvelopeDetail>(
+      "POST",
+      `/api/v1/envelopes/${envelopeId}/void`,
+      { body: reason ? { reason } : {} },
+    );
+    return data;
+  }
+
   async verifyBlockchain(envelopeId: string): Promise<VerificationResponse> {
     const { data } = await this.request<VerificationResponse>(
       "GET",
