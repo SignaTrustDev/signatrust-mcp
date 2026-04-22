@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "bundle": "npm run build && npx @anthropic-ai/mcpb pack .",
+    "smoke": "npm run build && node scripts/smoke.mjs",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit"
   },
