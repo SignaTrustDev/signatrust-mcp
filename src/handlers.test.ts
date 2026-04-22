@@ -18,6 +18,7 @@ function createMockClient() {
     requestDocumentUpload: vi.fn(),
     putBytesToUploadUrl: vi.fn(),
     analyzeEnvelope: vi.fn(),
+    voidEnvelope: vi.fn(),
     verifyBlockchain: vi.fn(),
   } as unknown as SignaTrustClient & {
     listEnvelopes: ReturnType<typeof vi.fn>;
@@ -27,6 +28,7 @@ function createMockClient() {
     requestDocumentUpload: ReturnType<typeof vi.fn>;
     putBytesToUploadUrl: ReturnType<typeof vi.fn>;
     analyzeEnvelope: ReturnType<typeof vi.fn>;
+    voidEnvelope: ReturnType<typeof vi.fn>;
     verifyBlockchain: ReturnType<typeof vi.fn>;
   };
 }
@@ -51,6 +53,7 @@ describe("TOOLS", () => {
       "list_templates",
       "upload_document",
       "analyze_document",
+      "void_envelope",
       "verify_blockchain",
     ]);
   });
@@ -63,9 +66,10 @@ describe("TOOLS", () => {
     }
   });
 
-  it("should NOT expose void_envelope (v1 API does not support void)", () => {
-    const names = TOOLS.map((t) => t.name);
-    expect(names).not.toContain("void_envelope");
+  it("should mark void_envelope as destructive (user should confirm before Claude runs it)", () => {
+    const voidTool = TOOLS.find((t) => t.name === "void_envelope");
+    expect(voidTool?.annotations.destructiveHint).toBe(true);
+    expect(voidTool?.annotations.readOnlyHint).toBe(false);
   });
 
   it("should NOT expose create_from_template (subsumed by create_envelope + templateId)", () => {
@@ -346,6 +350,40 @@ describe("analyze_document", () => {
     expect(client.analyzeEnvelope).toHaveBeenCalledWith("env_1");
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.analysis.sentiment).toBe("SAFE");
+  });
+});
+
+// =============================================================================
+// void_envelope
+// =============================================================================
+
+describe("void_envelope", () => {
+  it("should call voidEnvelope with id and reason, returning the updated envelope", async () => {
+    client.voidEnvelope.mockResolvedValue({
+      id: "env_1",
+      name: "Q1 agreement",
+      status: "VOIDED",
+      voidedAt: "2026-04-22T04:00:00Z",
+      voidReason: "contract terms changed",
+    });
+
+    const result = await handleTool(client, "void_envelope", {
+      id: "env_1",
+      reason: "contract terms changed",
+    });
+
+    expect(client.voidEnvelope).toHaveBeenCalledWith("env_1", "contract terms changed");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.status).toBe("VOIDED");
+    expect(parsed.voidReason).toBe("contract terms changed");
+  });
+
+  it("should call voidEnvelope with undefined reason when omitted", async () => {
+    client.voidEnvelope.mockResolvedValue({ id: "env_1", status: "VOIDED" });
+
+    await handleTool(client, "void_envelope", { id: "env_1" });
+
+    expect(client.voidEnvelope).toHaveBeenCalledWith("env_1", undefined);
   });
 });
 

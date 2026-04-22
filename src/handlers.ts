@@ -254,6 +254,40 @@ export const TOOLS = [
     },
   },
   {
+    name: "void_envelope",
+    description:
+      "Void (cancel) an in-progress envelope. The envelope's status becomes " +
+      "VOIDED, all signers receive a cancellation notice, and the void is " +
+      "recorded in the audit trail. Use this when the sender needs to cancel " +
+      "a contract that has already been sent to signers. Fails if the envelope " +
+      "is already COMPLETED or already VOIDED — use get_envelope first to " +
+      "check status. After voiding, the envelope can be deleted via the " +
+      "dashboard or DELETE /api/v1/envelopes/{id}.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        id: {
+          type: "string",
+          description: "Envelope ID to void",
+        },
+        reason: {
+          type: "string",
+          description:
+            "Optional reason for voiding — included in the cancellation " +
+            "notice sent to signers, the audit event, and the webhook payload. " +
+            "Recommend providing one so signers understand why.",
+          maxLength: 500,
+        },
+      },
+      required: ["id"],
+    },
+    annotations: {
+      title: "Void Envelope",
+      readOnlyHint: false,
+      destructiveHint: true,
+    },
+  },
+  {
     name: "verify_blockchain",
     description:
       "Verify a completed envelope's Solana anchor. Returns the composite " +
@@ -384,6 +418,11 @@ export async function handleTool(
 
     case "analyze_document": {
       const result = await client.analyzeEnvelope(args.envelopeId as string);
+      return success(result);
+    }
+
+    case "void_envelope": {
+      const result = await client.voidEnvelope(args.id as string, args.reason as string | undefined);
       return success(result);
     }
 
