@@ -3,7 +3,8 @@
   "name": "signatrust",
   "display_name": "SignaTrust",
   "version": "0.1.0",
-  "description": "Send, sign, and verify blockchain-secured documents from Claude. Create envelopes, track signing status, manage templates, and verify Solana blockchain anchors.",
+  "description": "Send documents for signature with three-tier security (Standard, Verified, Certified), manage templates, and verify Solana blockchain anchors that cryptographically bind the document, signer metadata, and audit trail.",
+  "long_description": "SignaTrust is a blockchain-secured electronic signature platform. This MCP server lets AI assistants create and manage signing envelopes, run AI-powered document review, and verify the composite-hash anchor on Solana that makes each signed envelope independently verifiable — even if SignaTrust ceases to exist.\n\nThree-tier signing ceremonies:\n- STANDARD: bearer-token access (routine approvals, internal docs)\n- VERIFIED: adds SMS/email OTP (employment, vendor contracts, healthcare consent)\n- CERTIFIED: adds WebAuthn biometric + device binding (real estate, high-value, regulatory)\n\nEvidence bundle: every envelope is anchored to Solana via a SHA-256 composite hash that binds the final PDF, signer metadata, and the hash-chained audit trail. RFC 3161 qualified timestamps from an independent TSA provide vendor-neutral proof of time.",
   "author": {
     "name": "SignaTrust",
     "url": "https://signatrust.io"
@@ -20,9 +21,31 @@
       "args": [
         "${__dirname}/dist/server.js"
       ],
-      "env": {}
+      "env": {
+        "SIGNATRUST_API_KEY": "${user_config.api_key}",
+        "SIGNATRUST_API_URL": "${user_config.api_url}"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "SignaTrust API Key",
+      "description": "Your SignaTrust API key. Create one at https://app.signatrust.io/settings/api-keys",
+      "sensitive": true,
+      "required": true
+    },
+    "api_url": {
+      "type": "string",
+      "title": "SignaTrust API URL",
+      "description": "API base URL. Leave as default unless you are self-hosting or using a staging environment.",
+      "default": "https://app.signatrust.io",
+      "required": false
     }
   },
   "homepage": "https://signatrust.io",
+  "documentation": "https://github.com/SignaTrustDev/signatrust-mcp#readme",
+  "support": "https://github.com/SignaTrustDev/signatrust-mcp/issues",
+  "privacy_policies": ["https://signatrust.io/privacy"],
   "license": "MIT"
 }

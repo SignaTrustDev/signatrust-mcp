@@ -113,4 +113,67 @@ describe("formatApiError", () => {
     });
     expect(result.content[0].text).toBe("Validation Failed");
   });
+
+  it("should discard 500 detail to avoid leaking internals", () => {
+    const result = formatApiError(500, {
+      type: "about:blank",
+      title: "Internal Server Error",
+      status: 500,
+      detail:
+        "PrismaClientKnownRequestError: Unique constraint failed on the fields: (`email`)\n    at /app/node_modules/@prisma/client/runtime.js:42:7",
+    });
+    expect(result.content[0].text).not.toContain("Prisma");
+    expect(result.content[0].text).not.toContain("node_modules");
+    expect(result.content[0].text).toContain("Internal server error");
+  });
+
+  it("should discard 503 detail to avoid leaking internals", () => {
+    const result = formatApiError(503, {
+      type: "about:blank",
+      title: "Service Unavailable",
+      status: 503,
+      detail: "AWS RDS connection pool exhausted on db-prod-01.internal",
+    });
+    expect(result.content[0].text).not.toContain("AWS");
+    expect(result.content[0].text).not.toContain("db-prod-01");
+    expect(result.content[0].text).toContain("Service unavailable");
+  });
+
+  it("should strip stack trace lines from 4xx detail", () => {
+    const result = formatApiError(400, {
+      type: "about:blank",
+      title: "Bad Request",
+      status: 400,
+      detail:
+        "Invalid signer email\n    at validateSigner (/app/src/lib/validation.ts:42:11)\n    at POST (/app/src/app/api/envelopes/route.ts:88:5)",
+    });
+    expect(result.content[0].text).toContain("Invalid signer email");
+    expect(result.content[0].text).not.toMatch(/\bat\s+validateSigner\b/);
+    expect(result.content[0].text).not.toContain("/app/src/");
+  });
+
+  it("should redact AWS-style request IDs", () => {
+    const result = formatApiError(400, {
+      type: "about:blank",
+      title: "Bad Request",
+      status: 400,
+      detail:
+        "Upload failed (request id: 1A2B3C4D5E6F7A8B9C0D1E2F3A4B5C6D)",
+    });
+    expect(result.content[0].text).toContain("Upload failed");
+    expect(result.content[0].text).toContain("[request-id]");
+    expect(result.content[0].text).not.toContain("1A2B3C4D5E6F7A8B9C0D1E2F3A4B5C6D");
+  });
+
+  it("should truncate overlong 4xx detail strings", () => {
+    const longDetail = "x".repeat(500);
+    const result = formatApiError(400, {
+      type: "about:blank",
+      title: "Bad Request",
+      status: 400,
+      detail: longDetail,
+    });
+    expect(result.content[0].text.length).toBeLessThanOrEqual(400);
+    expect(result.content[0].text).toMatch(/…$/);
+  });
 });

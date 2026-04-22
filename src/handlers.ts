@@ -1,11 +1,17 @@
 /**
  * MCP tool definitions and handlers.
  *
- * Extracted from server.ts for testability — the client is injected
- * rather than instantiated at module level.
+ * The SignaTrust client is injected rather than instantiated at module level
+ * so handlers are straightforward to unit test.
  */
 
-import type { SignaTrustClient, CreateEnvelopeSigner } from "@signatrustdev/signatrust-sdk";
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname } from "node:path";
+import type {
+  SignaTrustClient,
+  CreateEnvelopeSigner,
+  SecurityLevel,
+} from "./vendor/signatrust-sdk/index.js";
 
 // =============================================================================
 // Tool Definitions
@@ -16,13 +22,14 @@ export const TOOLS = [
     name: "list_envelopes",
     description:
       "List signature envelopes with optional status filter and pagination. " +
-      "Returns envelope summaries including signers, documents, and blockchain anchoring status.",
+      "Returns envelope summaries including signers, documents, and blockchain " +
+      "anchoring status.",
     inputSchema: {
       type: "object" as const,
       properties: {
         status: {
           type: "string",
-          enum: ["SENT", "NEEDS_SIGNATURE", "COMPLETED", "VOIDED", "DECLINED"],
+          enum: ["DRAFT", "SENT", "NEEDS_SIGNATURE", "COMPLETED", "VOIDED", "DECLINED"],
           description: "Filter by envelope status",
         },
         page: {
@@ -47,7 +54,7 @@ export const TOOLS = [
     name: "get_envelope",
     description:
       "Get full details of a specific envelope including all signers, " +
-      "documents, status, and blockchain transaction info.",
+      "documents, status, security level, and blockchain anchoring info.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -67,14 +74,34 @@ export const TOOLS = [
   {
     name: "create_envelope",
     description:
-      "Create and send a new envelope for signing. Requires at least one signer " +
-      "and one document. Signers are notified via their specified delivery method.",
+      "Create and send a new envelope for signing. Requires a name, at least " +
+      "one signer, and at least one document (pass document IDs from " +
+      "upload_document, or pass a templateId to create from a template). " +
+      "Signers are notified via their chosen delivery method. Use " +
+      "securityLevel to match the legal weight required: STANDARD for routine/" +
+      "internal approvals; VERIFIED (adds SMS/email OTP) for employment, " +
+      "vendor, or healthcare consent; CERTIFIED (adds WebAuthn biometric + " +
+      "device binding) for real estate, high-value, or regulatory signings.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        subject: {
+        name: {
           type: "string",
-          description: "Envelope subject/title shown to signers",
+          description: "Envelope name/title shown to signers (max 256 chars)",
+          maxLength: 256,
+        },
+        securityLevel: {
+          type: "string",
+          enum: ["STANDARD", "VERIFIED", "CERTIFIED"],
+          description:
+            "Signing ceremony tier. STANDARD = bearer-token only (default, " +
+            "legally weakest — vulnerable to link-forwarding disputes). " +
+            "VERIFIED = STANDARD + SMS/email OTP (defeats link forwarding; " +
+            "suitable for employment contracts, vendor agreements, healthcare " +
+            "consent). CERTIFIED = VERIFIED + WebAuthn biometric on a " +
+            "device-bound credential (near-unrepudiable; suitable for real " +
+            "estate, high-value transactions, regulated industries). All " +
+            "tiers are included on every plan.",
         },
         signers: {
           type: "array",
@@ -88,11 +115,14 @@ export const TOOLS = [
               },
               email: {
                 type: "string",
-                description: "Signer's email address",
+                description:
+                  "Signer's email address (required unless phone is provided)",
               },
               phone: {
                 type: "string",
-                description: "Signer's phone number (for SMS delivery)",
+                description:
+                  "Signer's phone number for SMS delivery (required unless " +
+                  "email is provided)",
               },
               role: {
                 type: "string",
@@ -102,7 +132,7 @@ export const TOOLS = [
               },
               routingOrder: {
                 type: "number",
-                description: "Signing order (1 = first, 2 = second, etc.)",
+                description: "Signing order (1 = first, 2 = second, ...)",
                 minimum: 1,
               },
               deliveryMethod: {
@@ -118,17 +148,23 @@ export const TOOLS = [
         documentIds: {
           type: "array",
           description:
-            "IDs of documents to include (create via create_document first)",
+            "IDs of documents to include. Use upload_document to create a " +
+            "document first. Either documentIds or templateId is required.",
           items: { type: "string" },
-          minItems: 1,
+        },
+        templateId: {
+          type: "string",
+          description:
+            "Template ID to create the envelope from. When set, the backend " +
+            "copies the template's document server-side — you do not need to " +
+            "supply documentIds. Either documentIds or templateId is required.",
         },
         message: {
           type: "string",
-          description:
-            "Optional message to include in the signing notification",
+          description: "Optional message included in the signing notification",
         },
       },
-      required: ["subject", "signers", "documentIds"],
+      required: ["signers"],
     },
     annotations: {
       title: "Create Envelope",
@@ -137,41 +173,18 @@ export const TOOLS = [
     },
   },
   {
-    name: "void_envelope",
-    description:
-      "Void an active envelope, cancelling all pending signatures. " +
-      "All signers are notified that the envelope has been voided.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        id: {
-          type: "string",
-          description: "Envelope ID to void",
-        },
-        voidReason: {
-          type: "string",
-          description: "Reason for voiding (shown to signers)",
-        },
-      },
-      required: ["id"],
-    },
-    annotations: {
-      title: "Void Envelope",
-      readOnlyHint: false,
-      destructiveHint: true,
-    },
-  },
-  {
     name: "list_templates",
     description:
       "List available document templates. Templates provide pre-configured " +
-      "documents with defined signer roles and form fields.",
+      "documents with defined signer roles and form-field placement.",
     inputSchema: {
       type: "object" as const,
       properties: {
         includeSystem: {
           type: "boolean",
-          description: "Include system-provided templates (default: true)",
+          description:
+            "Include system-provided templates alongside user templates " +
+            "(default: true)",
         },
       },
     },
@@ -182,79 +195,75 @@ export const TOOLS = [
     },
   },
   {
-    name: "create_from_template",
+    name: "upload_document",
     description:
-      "Create a new envelope from a template. This is a 3-step operation: " +
-      "fetches the template, creates a document copy, then creates the envelope. " +
-      "Use list_templates to find available template IDs.",
+      "Upload a local file to SignaTrust and return a document ID suitable " +
+      "for passing to create_envelope. Reads the file from disk, requests a " +
+      "pre-signed S3 upload URL, streams the bytes, and returns metadata. " +
+      "Supported: PDF (recommended), DOCX, images. Max size is enforced by " +
+      "your plan's limits.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        templateId: {
+        filePath: {
           type: "string",
-          description: "Template ID to create from",
+          description: "Absolute path to the file on the local filesystem",
         },
-        subject: {
+        name: {
           type: "string",
-          description: "Envelope subject (defaults to template name)",
+          description:
+            "Display name for the document (default: the file's basename)",
         },
-        signers: {
-          type: "array",
-          description: "Signers for this envelope",
-          items: {
-            type: "object",
-            properties: {
-              name: {
-                type: "string",
-                description: "Signer's full name",
-              },
-              email: {
-                type: "string",
-                description: "Signer's email address",
-              },
-              phone: {
-                type: "string",
-                description: "Signer's phone number",
-              },
-              role: {
-                type: "string",
-                enum: ["SIGNER", "OBSERVER"],
-                description: "Role (default: SIGNER)",
-              },
-              routingOrder: {
-                type: "number",
-                description: "Signing order",
-                minimum: 1,
-              },
-              deliveryMethod: {
-                type: "string",
-                enum: ["EMAIL", "SMS", "BOTH"],
-                description: "Notification method (default: EMAIL)",
-              },
-            },
-            required: ["name"],
-          },
-          minItems: 1,
-        },
-        message: {
+        contentType: {
           type: "string",
-          description: "Optional message for signers",
+          description:
+            "MIME type (default: inferred from the file extension — .pdf, " +
+            ".docx, .png, .jpg, .jpeg are recognised)",
         },
       },
-      required: ["templateId", "signers"],
+      required: ["filePath"],
     },
     annotations: {
-      title: "Create from Template",
+      title: "Upload Document",
       readOnlyHint: false,
+      destructiveHint: false,
+    },
+  },
+  {
+    name: "analyze_document",
+    description:
+      "Run AI contract analysis (Google Gemini) on a completed envelope's " +
+      "document. Returns a structured report covering risk assessment, " +
+      "flagged clauses, and overall sentiment (SAFE / CAUTION / RISKY). " +
+      "Plan-gated: free accounts receive a 403; upgrade to Pro Lite or above " +
+      "to use this. Surface the 403 message to the user rather than retrying.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        envelopeId: {
+          type: "string",
+          description: "Envelope ID to analyze",
+        },
+      },
+      required: ["envelopeId"],
+    },
+    annotations: {
+      title: "Analyze Document (AI)",
+      readOnlyHint: true,
       destructiveHint: false,
     },
   },
   {
     name: "verify_blockchain",
     description:
-      "Verify a completed envelope's blockchain anchor on Solana. " +
-      "Returns the transaction ID, network, timestamp, and explorer URL " +
-      "providing cryptographic proof of when the document was signed.",
+      "Verify a completed envelope's Solana anchor. Returns the composite " +
+      "hash (SHA-256 binding the final PDF, signer metadata, and the " +
+      "hash-chained audit trail), the file hash, the Solana transaction ID, " +
+      "and an explorer URL. Because the composite hash is anchored to " +
+      "Solana, any modification to the document, signer records, or audit " +
+      "trail breaks the hash chain and fails verification. This is the " +
+      "proof that makes the envelope independently verifiable without " +
+      "SignaTrust.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -274,7 +283,7 @@ export const TOOLS = [
 ];
 
 // =============================================================================
-// Handler
+// Helpers
 // =============================================================================
 
 type ToolArgs = Record<string, unknown>;
@@ -284,6 +293,26 @@ function success(data: unknown) {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   };
 }
+
+const EXTENSION_MIME: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".doc": "application/msword",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".txt": "text/plain",
+};
+
+function inferContentType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+  return EXTENSION_MIME[ext] ?? "application/octet-stream";
+}
+
+// =============================================================================
+// Handler
+// =============================================================================
 
 export async function handleTool(
   client: SignaTrustClient,
@@ -310,19 +339,13 @@ export async function handleTool(
 
     case "create_envelope": {
       const result = await client.createEnvelope({
-        subject: args.subject as string,
+        name: args.name as string,
         signers: args.signers as CreateEnvelopeSigner[],
-        documentIds: args.documentIds as string[],
+        documentIds: args.documentIds as string[] | undefined,
+        templateId: args.templateId as string | undefined,
         message: args.message as string | undefined,
+        securityLevel: args.securityLevel as SecurityLevel | undefined,
       });
-      return success(result);
-    }
-
-    case "void_envelope": {
-      const result = await client.voidEnvelope(
-        args.id as string,
-        args.voidReason as string | undefined,
-      );
       return success(result);
     }
 
@@ -333,36 +356,39 @@ export async function handleTool(
       return success(result);
     }
 
-    case "create_from_template": {
-      // Step 1: Get template details
-      const template = await client.getTemplate(args.templateId as string);
+    case "upload_document": {
+      const filePath = args.filePath as string;
+      const stats = await stat(filePath);
+      const bytes = await readFile(filePath);
+      const displayName = (args.name as string | undefined) ?? basename(filePath);
+      const contentType =
+        (args.contentType as string | undefined) ?? inferContentType(filePath);
 
-      // Step 2: Create document from template's S3 key
-      const document = await client.createDocument({
-        fileName: template.documentName,
-        fileType: template.contentType,
-        s3Key: template.documentUrl?.split("?")[0],
+      const uploaded = await client.requestDocumentUpload({
+        name: displayName,
+        contentType,
+        size: stats.size,
       });
 
-      // Step 3: Create envelope with the new document
-      const envelope = await client.createEnvelope({
-        subject: (args.subject as string) || template.name,
-        signers: args.signers as CreateEnvelopeSigner[],
-        documentIds: [document.id],
-        message: args.message as string | undefined,
-      });
+      await client.putBytesToUploadUrl(uploaded.uploadUrl, bytes, contentType);
 
       return success({
-        envelope,
-        templateUsed: { id: template.id, name: template.name },
-        documentCreated: { id: document.id, name: document.name },
+        id: uploaded.id,
+        name: uploaded.name,
+        contentType: uploaded.contentType,
+        size: uploaded.size,
+        hash: uploaded.hash,
+        createdAt: uploaded.createdAt,
       });
     }
 
+    case "analyze_document": {
+      const result = await client.analyzeEnvelope(args.envelopeId as string);
+      return success(result);
+    }
+
     case "verify_blockchain": {
-      const result = await client.verifyBlockchain(
-        args.envelopeId as string,
-      );
+      const result = await client.verifyBlockchain(args.envelopeId as string);
       return success(result);
     }
 
