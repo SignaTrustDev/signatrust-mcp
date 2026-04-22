@@ -24,6 +24,12 @@ import type {
 export interface ClientConfig {
   apiKey: string;
   baseUrl: string;
+  /**
+   * Optional extra headers added to every API request. Useful for
+   * preview/staging deployments gated by a platform auth layer (e.g.
+   * Vercel's protection bypass). Never used in production.
+   */
+  extraHeaders?: Record<string, string>;
 }
 
 export interface ApiResponse<T> {
@@ -51,10 +57,12 @@ export class ApiError extends Error {
 export class SignaTrustClient {
   private apiKey: string;
   private baseUrl: string;
+  private extraHeaders: Record<string, string>;
 
   constructor(config: ClientConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
+    this.extraHeaders = config.extraHeaders ?? {};
   }
 
   private async request<T>(
@@ -79,6 +87,7 @@ export class SignaTrustClient {
       "x-api-key": this.apiKey,
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...this.extraHeaders,
     };
 
     const response = await fetch(url.toString(), {

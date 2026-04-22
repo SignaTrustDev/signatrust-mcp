@@ -31,6 +31,7 @@ import { TOOLS, handleTool } from "./handlers.js";
 const API_KEY = process.env.SIGNATRUST_API_KEY;
 const API_URL =
   process.env.SIGNATRUST_API_URL || "https://app.signatrust.io";
+const VERCEL_PROTECTION_BYPASS = process.env.VERCEL_PROTECTION_BYPASS;
 
 if (!API_KEY) {
   console.error(
@@ -40,7 +41,22 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-const client = new SignaTrustClient({ apiKey: API_KEY, baseUrl: API_URL });
+// Staging is fronted by Vercel's deployment protection. Forwarding the bypass
+// header lets harness runs and staging smoke tests reach the application.
+// In production the env var is unset, so nothing is forwarded.
+// Note: do NOT also send x-vercel-set-bypass-cookie — that triggers a
+// redirect loop under node's fetch because cookies aren't persisted across
+// the follow-up request.
+const extraHeaders: Record<string, string> = {};
+if (VERCEL_PROTECTION_BYPASS) {
+  extraHeaders["x-vercel-protection-bypass"] = VERCEL_PROTECTION_BYPASS;
+}
+
+const client = new SignaTrustClient({
+  apiKey: API_KEY,
+  baseUrl: API_URL,
+  extraHeaders,
+});
 
 // =============================================================================
 // Server Setup
