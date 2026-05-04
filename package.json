@@ -43,7 +43,11 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "1.26.0"
+  },
+  "overrides": {
+    "@hono/node-server": "^1.19.10",
+    "hono": "^4.11.10"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
