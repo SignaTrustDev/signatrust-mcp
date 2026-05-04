@@ -24,6 +24,9 @@ import { tmpdir } from "node:os";
 const LIVE = !!process.env.SIGNATRUST_API_KEY && !process.env.SIGNATRUST_API_KEY.includes("fake");
 const API_KEY = process.env.SIGNATRUST_API_KEY || "sk_fake_for_protocol_test";
 const API_URL = process.env.SIGNATRUST_API_URL || "https://app.signatrust.io";
+const GREEN_PATH = process.argv.includes("--green-path");
+const SIGNER_EMAIL = process.env.E2E_SIGNER_EMAIL || "e2e-test@example.com";
+const SIGNER_NAME = process.env.E2E_SIGNER_NAME || "E2E Test Signer";
 
 const results = { pass: 0, fail: 0, skip: 0, items: [] };
 function record(name, outcome, detail) {
@@ -247,11 +250,11 @@ console.log(
   `\n== Section D — dispatch (${LIVE ? "live backend" : "fake key, expecting 401 / sanitized errors"}) ==`,
 );
 
-async function toolCall(id, name, args) {
+async function toolCall(id, name, args, { timeoutMs = LIVE ? 15000 : 5000 } = {}) {
   const r = await runProtocol(
     [initialize, initialized, callTool(id, name, args)],
-    { env: { SIGNATRUST_API_KEY: API_KEY, SIGNATRUST_API_URL: API_URL } },
-    );
+    { env: { SIGNATRUST_API_KEY: API_KEY, SIGNATRUST_API_URL: API_URL }, timeoutMs },
+  );
   return r.responses.find((x) => x.id === id)?.result ?? null;
 }
 
@@ -399,6 +402,243 @@ async function toolCall(id, name, args) {
 }
 
 // ---------------------------------------------------------------------------
+// Section E — green-path (opt-in; creates real state)
+// ---------------------------------------------------------------------------
+//
+// This section uploads a real PDF, creates a real envelope on the account
+// backing the API key, runs AI analysis, and voids the envelope to clean up.
+// It is gated behind --green-path and requires LIVE (real API key) because
+// every tool call is a real mutation and is measured against real responses.
+//
+// At the end the harness prints the IDs of everything it created so you can
+// verify in the dashboard (or further clean up manually if needed).
+//
+// Usage:
+//   SIGNATRUST_API_KEY=sk_... node scripts/e2e.mjs --green-path
+//
+
+const createdIds = { documentId: null, envelopeId: null, voided: false };
+
+if (GREEN_PATH && !LIVE) {
+  console.log(
+    "\n== Section E — SKIPPED (green-path requires a real SIGNATRUST_API_KEY) ==",
+  );
+} else if (GREEN_PATH) {
+  console.log("\n== Section E — green-path (creates real state on your account) ==");
+  console.log(
+    `  signer: ${SIGNER_NAME} <${SIGNER_EMAIL}> (override via E2E_SIGNER_EMAIL / E2E_SIGNER_NAME)`,
+  );
+  console.log("");
+
+  // Upload a small PDF
+  const tmp = await mkdtemp(join(tmpdir(), "e2e-green-"));
+  const pdfPath = join(tmp, "e2e-green.pdf");
+  // Minimal valid PDF — 1-object catalog. Enough for upload storage.
+  await writeFile(
+    pdfPath,
+    "%PDF-1.4\n1 0 obj <</Type /Catalog>> endobj\ntrailer <</Root 1 0 R>>\n%%EOF\n",
+  );
+
+  let uploadResult = await toolCall(301, "upload_document", { filePath: pdfPath });
+  await rm(tmp, { recursive: true, force: true });
+
+  const uploadOk =
+    uploadResult && !uploadResult.isError && uploadResult.content?.[0]?.text;
+  let uploaded = null;
+  if (uploadOk) {
+    try {
+      uploaded = JSON.parse(uploadResult.content[0].text);
+      createdIds.documentId = uploaded.id ?? null;
+    } catch {
+      /* leave null */
+    }
+  }
+  record(
+    "green: upload_document → returns document id",
+    uploaded?.id ? "pass" : "fail",
+    uploaded?.id
+      ? `id=${uploaded.id} size=${uploaded.size}`
+      : uploadResult?.content?.[0]?.text?.slice(0, 140),
+  );
+
+  // Create an envelope from the uploaded doc with VERIFIED tier
+  let envelope = null;
+  if (uploaded?.id) {
+    const createResult = await toolCall(302, "create_envelope", {
+      name: `E2E harness — ${new Date().toISOString().slice(0, 19)}`,
+      signers: [{ name: SIGNER_NAME, email: SIGNER_EMAIL }],
+      documentIds: [uploaded.id],
+      securityLevel: "VERIFIED",
+    });
+    const ok = createResult && !createResult.isError;
+    if (ok) {
+      try {
+        envelope = JSON.parse(createResult.content[0].text);
+        createdIds.envelopeId = envelope.id ?? null;
+      } catch {
+        /* leave null */
+      }
+    }
+    // Note: V1EnvelopeResponse does not echo securityLevel back (backend
+    // adapter gap — field is accepted and persisted but not surfaced in the
+    // response). We verify the envelope was created; tier persistence is
+    // covered by the unit tests on the handler's body construction.
+    record(
+      "green: create_envelope with VERIFIED + uploaded docId",
+      envelope?.id && envelope?.status === "SENT" ? "pass" : "fail",
+      envelope
+        ? `id=${envelope.id} status=${envelope.status} (securityLevel not in v1 response — backend adapter gap)`
+        : createResult?.content?.[0]?.text?.slice(0, 140),
+    );
+  } else {
+    record("green: create_envelope with VERIFIED + uploaded docId", "skip", "upload failed");
+  }
+
+  // Round-trip: get_envelope should return the one we just created
+  if (envelope?.id) {
+    const getResult = await toolCall(303, "get_envelope", { id: envelope.id });
+    let retrieved = null;
+    try {
+      retrieved = JSON.parse(getResult.content[0].text);
+    } catch {
+      /* leave null */
+    }
+    const matches =
+      retrieved?.id === envelope.id && retrieved?.name === envelope.name;
+    record(
+      "green: get_envelope round-trips the created envelope",
+      matches ? "pass" : "fail",
+      matches
+        ? `name="${retrieved.name}" status=${retrieved.status}`
+        : getResult?.content?.[0]?.text?.slice(0, 140),
+    );
+
+    // Verify the v1 response shape (name, nested blockchain.*) — the
+    // whole point of correcting the vendored SDK types.
+    const shapeOk =
+      typeof retrieved?.name === "string" &&
+      retrieved?.blockchain !== undefined &&
+      typeof retrieved.blockchain === "object";
+    record(
+      "green: response shape is v1 (name + blockchain.*)",
+      shapeOk ? "pass" : "fail",
+      shapeOk
+        ? `blockchain.txId=${retrieved.blockchain.txId ?? "null"}`
+        : `keys=[${retrieved ? Object.keys(retrieved).join(",") : "nil"}]`,
+    );
+  } else {
+    record("green: get_envelope round-trips the created envelope", "skip", "no envelope");
+    record("green: response shape is v1 (name + blockchain.*)", "skip", "no envelope");
+  }
+
+  // verify_blockchain — the freshly-sent envelope has no txId yet; just
+  // check the response shape and that `verified: false` is returned.
+  if (envelope?.id) {
+    const bcResult = await toolCall(304, "verify_blockchain", {
+      envelopeId: envelope.id,
+    });
+    let bc = null;
+    try {
+      bc = JSON.parse(bcResult.content[0].text);
+    } catch {
+      /* leave null */
+    }
+    const ok =
+      bc !== null &&
+      typeof bc.verified === "boolean" &&
+      "compositeHash" in bc &&
+      "fileHash" in bc;
+    record(
+      "green: verify_blockchain returns v1 blockchain shape",
+      ok ? "pass" : "fail",
+      ok
+        ? `verified=${bc.verified} txId=${bc.txId} compositeHash=${bc.compositeHash}`
+        : bcResult?.content?.[0]?.text?.slice(0, 140),
+    );
+  } else {
+    record("green: verify_blockchain returns v1 blockchain shape", "skip", "no envelope");
+  }
+
+  // analyze_document — plan-gated. Accept success OR a clean 403 message.
+  if (envelope?.id) {
+    const aiResult = await toolCall(305, "analyze_document", {
+      envelopeId: envelope.id,
+    });
+    const succeeded = aiResult && !aiResult.isError;
+    const planGated =
+      aiResult?.isError === true &&
+      (/Forbidden/.test(aiResult.content[0].text) ||
+        /plan/i.test(aiResult.content[0].text));
+    const ok = succeeded || planGated;
+    record(
+      succeeded
+        ? "green: analyze_document succeeded (PRO+ account)"
+        : planGated
+          ? "green: analyze_document plan-gated (expected on Free)"
+          : "green: analyze_document",
+      ok ? "pass" : "fail",
+      aiResult?.content?.[0]?.text?.slice(0, 140),
+    );
+  } else {
+    record("green: analyze_document", "skip", "no envelope");
+  }
+
+  // Void the envelope we created (clean up after ourselves)
+  if (envelope?.id) {
+    const voidResult = await toolCall(306, "void_envelope", {
+      id: envelope.id,
+      reason: "e2e harness cleanup",
+    });
+    let voided = null;
+    try {
+      voided = JSON.parse(voidResult.content[0].text);
+    } catch {
+      /* leave null */
+    }
+    const ok =
+      voided?.status === "VOIDED" && typeof voided?.voidedAt === "string";
+    createdIds.voided = ok;
+    record(
+      "green: void_envelope transitions status to VOIDED",
+      ok ? "pass" : "fail",
+      ok
+        ? `voidedAt=${voided.voidedAt} reason="${voided.voidReason}"`
+        : voidResult?.content?.[0]?.text?.slice(0, 140),
+    );
+
+    // Confirm void took by re-fetching
+    const reGet = await toolCall(307, "get_envelope", { id: envelope.id });
+    let after = null;
+    try {
+      after = JSON.parse(reGet.content[0].text);
+    } catch {
+      /* leave null */
+    }
+    record(
+      "green: get_envelope after void reports status=VOIDED",
+      after?.status === "VOIDED" ? "pass" : "fail",
+      after
+        ? `status=${after.status} voidReason="${after.voidReason}"`
+        : reGet?.content?.[0]?.text?.slice(0, 140),
+    );
+  } else {
+    record("green: void_envelope transitions status to VOIDED", "skip", "no envelope");
+    record("green: get_envelope after void reports status=VOIDED", "skip", "no envelope");
+  }
+
+  console.log("");
+  console.log("Created state (for manual verification / cleanup):");
+  console.log(`  documentId:  ${createdIds.documentId ?? "(none)"}`);
+  console.log(`  envelopeId:  ${createdIds.envelopeId ?? "(none)"}`);
+  console.log(`  voided:      ${createdIds.voided}`);
+  if (createdIds.envelopeId && !createdIds.voided) {
+    console.log(
+      `  WARNING: envelope created but not voided — clean up manually in the dashboard.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
 console.log("");
@@ -408,6 +648,10 @@ console.log(
 if (!LIVE) {
   console.log(
     "Note: set SIGNATRUST_API_KEY=sk_... (real staging key) to verify green paths against live backend.",
+  );
+} else if (!GREEN_PATH) {
+  console.log(
+    "Note: append --green-path to create a real envelope and exercise every green-path tool. The harness voids the envelope when done.",
   );
 }
 process.exit(results.fail > 0 ? 1 : 0);
