@@ -4,7 +4,7 @@
 
 If you discover a security issue in this MCP server, please report it privately rather than filing a public issue.
 
-- **Email:** security@signatrust.io
+- **Email:** admin@signatrust.io
 - **Expected initial response:** within 72 hours
 - **Coordinated disclosure:** we will work with you on a fix and disclosure timeline before any public advisory.
 
