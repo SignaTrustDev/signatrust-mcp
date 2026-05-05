@@ -1,6 +1,6 @@
 {
-  "name": "@signatrustdev/mcp-server",
-  "version": "0.1.0",
+  "name": "@signatrust/mcp-server",
+  "version": "0.1.1",
   "description": "Model Context Protocol server for the SignaTrust document signing API",
   "type": "module",
   "main": "dist/server.js",
@@ -36,9 +36,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/SignaTrustDev/signatrust-mcp.git"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   },
   "engines": {
     "node": ">=18"
