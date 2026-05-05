@@ -1,0 +1,25 @@
+{
+  "name": "signatrust-mcp-server",
+  "version": "0.0.1",
+  "description": "Redirect stub. The canonical SignaTrust MCP server is published as @signatrust/mcp-server.",
+  "bin": {
+    "signatrust-mcp-server-redirect": "bin/redirect.cjs"
+  },
+  "files": [
+    "bin",
+    "README.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SignaTrustDev/signatrust-mcp.git",
+    "directory": "stubs/signatrust-mcp-server"
+  },
+  "homepage": "https://www.npmjs.com/package/@signatrust/mcp-server",
+  "keywords": [
+    "signatrust",
+    "mcp",
+    "deprecated",
+    "redirect"
+  ]
+}
