@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SignaTrustDev/signatrust-mcp.git"
+    "url": "git+https://github.com/SignaTrustDev/signatrust-mcp.git"
   },
   "engines": {
     "node": ">=18"
