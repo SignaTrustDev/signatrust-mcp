@@ -1,11 +1,12 @@
 {
   "name": "@signatrust/mcp-server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Model Context Protocol server for the SignaTrust document signing API",
   "type": "module",
   "main": "dist/server.js",
   "bin": {
-    "signatrust-mcp-server": "dist/server.js"
+    "signatrust-mcp-server": "dist/server.js",
+    "mcp-server": "dist/server.js"
   },
   "files": [
     "dist",
@@ -20,6 +21,7 @@
     "test:coverage": "vitest run --coverage",
     "bundle": "npm run build && npx @anthropic-ai/mcpb pack .",
     "smoke": "npm run build && node scripts/smoke.mjs",
+    "smoke:published": "node scripts/smoke-published.mjs",
     "e2e": "npm run build && node scripts/e2e.mjs",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit"
