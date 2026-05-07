@@ -1,22 +1,37 @@
 #!/usr/bin/env node
 /**
- * Smoke test against the PUBLISHED npm package via npx.
+ * Smoke test against the PUBLISHED npm package.
  *
- * Confirms three things:
- *   1. `npx -y @signatrust/mcp-server` downloads + boots the published tarball
+ * Installs @signatrust/mcp-server from the public registry into a temp
+ * directory and spawns the installed dist/server.js directly via node.
+ * This proves that the published tarball, after npm-install, produces a
+ * working MCP server.
+ *
+ * Confirms three things end-to-end:
+ *   1. The package installs cleanly from the public registry
  *   2. Without SIGNATRUST_API_KEY, the server exits 1 with a helpful message
- *   3. With a (fake) SIGNATRUST_API_KEY, it acks initialize and lists all 8 tools
+ *   3. With a (fake) key, the server acks initialize and lists all 8 tools
  *
- * This proves the README install snippet would actually work in Claude Desktop.
+ * Why not invoke `npx -y @signatrust/mcp-server` directly?
+ * Cross-platform spawning of `npx.cmd` from a Node child_process has
+ * Windows-specific quirks (cmd.exe shim resolution + Node 20.12+ security
+ * change require shell:true, which then breaks bin resolution differently).
+ * Real users invoking npx from a real shell are unaffected — only this
+ * test harness was. Spawning the installed dist/server.js directly via
+ * node sidesteps the wrapper layer and tests the actual published code.
  *
  * Usage:
  *   node scripts/smoke-published.mjs
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const PKG = "@signatrust/mcp-server";
-const NPX_CMD = process.platform === "win32" ? "npx.cmd" : "npx";
+const REGISTRY = "https://registry.npmjs.org";
+const NPM_CMD = process.platform === "win32" ? "npm.cmd" : "npm";
 
 const results = { pass: 0, fail: 0 };
 function record(name, outcome, detail) {
@@ -25,12 +40,41 @@ function record(name, outcome, detail) {
   console.log(`  [${tag}] ${name}${detail ? ` — ${detail}` : ""}`);
 }
 
-async function runProtocol(messages, { env = {}, timeoutMs = 60000 } = {}) {
+console.log(`\n== Smoke test against published ${PKG} ==\n`);
+
+// Install the package into a temp dir
+const tmp = await mkdtemp(join(tmpdir(), "smoke-published-"));
+console.log(`  Installing to ${tmp} ...`);
+const install = spawnSync(
+  NPM_CMD,
+  ["install", "--prefix", tmp, "--registry", REGISTRY, `${PKG}@latest`],
+  { stdio: "pipe", shell: process.platform === "win32" },
+);
+if (install.status !== 0) {
+  console.log(`  [FAIL] install — exit=${install.status}`);
+  console.log(install.stderr?.toString().slice(0, 500));
+  process.exit(1);
+}
+
+const installedVersion = JSON.parse(
+  (
+    await import("node:fs").then((fs) =>
+      fs.promises.readFile(
+        join(tmp, "node_modules", PKG, "package.json"),
+        "utf8",
+      ),
+    )
+  ),
+).version;
+console.log(`  Installed version: ${installedVersion}\n`);
+
+const SERVER_JS = join(tmp, "node_modules", PKG, "dist", "server.js");
+
+async function runProtocol(messages, { env = {}, timeoutMs = 10000 } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(NPX_CMD, ["-y", PKG], {
+    const child = spawn(process.execPath, [SERVER_JS], {
       env: { ...process.env, ...env },
       stdio: ["pipe", "pipe", "pipe"],
-      shell: process.platform === "win32",
     });
 
     let stdout = "";
@@ -75,11 +119,22 @@ async function runProtocol(messages, { env = {}, timeoutMs = 60000 } = {}) {
   });
 }
 
-console.log(`\n== Smoke test against published ${PKG} ==\n`);
-
 // Test 1 — refuses to start without API key
 {
-  const r = await runProtocol([], { env: { SIGNATRUST_API_KEY: "" }, timeoutMs: 60000 });
+  // Pass an env with API key cleared. Use a fresh env (not inheriting our shell's)
+  // so that any pre-existing SIGNATRUST_API_KEY doesn't leak in.
+  const baseEnv = { ...process.env };
+  delete baseEnv.SIGNATRUST_API_KEY;
+  const r = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [SERVER_JS], {
+      env: baseEnv,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("exit", (code) => resolve({ stderr, exitCode: code }));
+    setTimeout(() => child.kill("SIGKILL"), 5000);
+  });
   const ok = r.exitCode === 1 && /SIGNATRUST_API_KEY/.test(r.stderr);
   record(
     "boot: refuses to start without SIGNATRUST_API_KEY",
@@ -108,7 +163,6 @@ console.log(`\n== Smoke test against published ${PKG} ==\n`);
       SIGNATRUST_API_KEY: "sk_fake_smoke_test",
       SIGNATRUST_API_URL: "https://app.signatrust.io",
     },
-    timeoutMs: 60000,
   });
 
   const initResp = r.responses.find((x) => x.id === 1);
@@ -138,6 +192,8 @@ console.log(`\n== Smoke test against published ${PKG} ==\n`);
     toolsOk ? `[${tools.join(", ")}]` : `got=[${tools.join(", ")}]`,
   );
 }
+
+await rm(tmp, { recursive: true, force: true });
 
 console.log(`\nResult: ${results.pass} pass, ${results.fail} fail\n`);
 process.exit(results.fail > 0 ? 1 : 0);
