@@ -129,7 +129,7 @@ export class SignaTrustClient {
   async getEnvelope(id: string): Promise<EnvelopeDetail> {
     const { data } = await this.request<EnvelopeDetail>(
       "GET",
-      `/api/v1/envelopes/${id}`,
+      `/api/v1/envelopes/${encodeURIComponent(id)}`,
     );
     return data;
   }
@@ -208,7 +208,7 @@ export class SignaTrustClient {
   ): Promise<EnvelopeDetail> {
     const { data } = await this.request<EnvelopeDetail>(
       "POST",
-      `/api/v1/envelopes/${envelopeId}/void`,
+      `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/void`,
       { body: reason ? { reason } : {} },
     );
     return data;
@@ -217,7 +217,7 @@ export class SignaTrustClient {
   async verifyBlockchain(envelopeId: string): Promise<VerificationResponse> {
     const { data } = await this.request<VerificationResponse>(
       "GET",
-      `/api/v1/envelopes/${envelopeId}/blockchain`,
+      `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/blockchain`,
     );
     return data;
   }
@@ -229,7 +229,7 @@ export class SignaTrustClient {
   async analyzeEnvelope(envelopeId: string): Promise<AnalysisResponse> {
     const { data } = await this.request<AnalysisResponse>(
       "POST",
-      `/api/v1/envelopes/${envelopeId}/analyze`,
+      `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/analyze`,
     );
     return data;
   }
