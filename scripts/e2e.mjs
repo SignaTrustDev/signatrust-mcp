@@ -165,8 +165,10 @@ const expectedTools = [
   "void_envelope",
   "list_templates",
   "upload_document",
+  "download_document",
   "analyze_document",
   "verify_blockchain",
+  "get_evidence",
 ];
 const listedNames = toolsList.map((t) => t.name);
 const allPresent = expectedTools.every((n) => listedNames.includes(n));
@@ -196,7 +198,9 @@ const readOnlyTools = toolsList
   .sort();
 const expectedReadOnly = [
   "analyze_document",
+  "download_document",
   "get_envelope",
+  "get_evidence",
   "list_envelopes",
   "list_templates",
   "verify_blockchain",

@@ -17,9 +17,11 @@ function createMockClient() {
     listTemplates: vi.fn(),
     requestDocumentUpload: vi.fn(),
     putBytesToUploadUrl: vi.fn(),
+    downloadDocument: vi.fn(),
     analyzeEnvelope: vi.fn(),
     voidEnvelope: vi.fn(),
     verifyBlockchain: vi.fn(),
+    getEvidence: vi.fn(),
   } as unknown as SignaTrustClient & {
     listEnvelopes: ReturnType<typeof vi.fn>;
     getEnvelope: ReturnType<typeof vi.fn>;
@@ -27,9 +29,11 @@ function createMockClient() {
     listTemplates: ReturnType<typeof vi.fn>;
     requestDocumentUpload: ReturnType<typeof vi.fn>;
     putBytesToUploadUrl: ReturnType<typeof vi.fn>;
+    downloadDocument: ReturnType<typeof vi.fn>;
     analyzeEnvelope: ReturnType<typeof vi.fn>;
     voidEnvelope: ReturnType<typeof vi.fn>;
     verifyBlockchain: ReturnType<typeof vi.fn>;
+    getEvidence: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -52,9 +56,11 @@ describe("TOOLS", () => {
       "create_envelope",
       "list_templates",
       "upload_document",
+      "download_document",
       "analyze_document",
       "void_envelope",
       "verify_blockchain",
+      "get_evidence",
     ]);
   });
 
@@ -413,6 +419,61 @@ describe("verify_blockchain", () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.verified).toBe(true);
     expect(parsed.compositeHash).toBe("abc123");
+  });
+});
+
+// =============================================================================
+// download_document
+// =============================================================================
+
+describe("download_document", () => {
+  it("should call downloadDocument with documentId and pass through the URL", async () => {
+    client.downloadDocument.mockResolvedValue({
+      id: "doc_1",
+      name: "contract.pdf",
+      downloadUrl: "https://s3.example.com/doc_1?sig=abc",
+      expiresIn: 3600,
+    });
+
+    const result = await handleTool(client, "download_document", {
+      documentId: "doc_1",
+    });
+
+    expect(client.downloadDocument).toHaveBeenCalledWith("doc_1");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.downloadUrl).toBe("https://s3.example.com/doc_1?sig=abc");
+    expect(parsed.expiresIn).toBe(3600);
+  });
+});
+
+// =============================================================================
+// get_evidence
+// =============================================================================
+
+describe("get_evidence", () => {
+  it("should call getEvidence with envelopeId and pass through the bundle", async () => {
+    client.getEvidence.mockResolvedValue({
+      bundle: {
+        envelope: { id: "env_1", name: "NDA", status: "COMPLETED" },
+        signers: [{ id: "s1", name: "Dana Lee" }],
+        auditTrail: {
+          events: [{ action: "CREATED" }, { action: "SIGNED" }],
+          startTime: "2026-06-01T00:00:00Z",
+          endTime: "2026-06-02T00:00:00Z",
+        },
+        blockchainVerification: { verified: true },
+      },
+    });
+
+    const result = await handleTool(client, "get_evidence", {
+      envelopeId: "env_1",
+    });
+
+    expect(client.getEvidence).toHaveBeenCalledWith("env_1");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.bundle.envelope.id).toBe("env_1");
+    expect(parsed.bundle.auditTrail.events).toHaveLength(2);
+    expect(parsed.bundle.blockchainVerification.verified).toBe(true);
   });
 });
 

@@ -169,6 +169,17 @@ export interface DocumentUploadResponse {
   uploadUrl: string;
 }
 
+/**
+ * Response from GET /api/v1/documents/{id}/download.
+ * `downloadUrl` is a short-lived pre-signed URL (valid for `expiresIn` seconds).
+ */
+export interface DocumentDownloadResponse {
+  id: string;
+  name: string;
+  downloadUrl: string;
+  expiresIn: number;
+}
+
 // =============================================================================
 // Verification
 // =============================================================================
@@ -189,6 +200,33 @@ export interface VerificationResponse {
   hashVersion: number | null;
   verified: boolean;
   timestamp: number | null;
+}
+
+// =============================================================================
+// Evidence Bundle
+// =============================================================================
+
+/**
+ * Self-contained evidence record from GET /api/v1/envelopes/{id}/evidence.
+ *
+ * Bundles the envelope, its signers, the full audit trail, and (when anchored)
+ * the blockchain verification into one record so it can be retained or handed
+ * to a third party as court-ready proof. The nested envelope/signer/audit-event
+ * objects are passed through verbatim from the backend.
+ */
+export interface EvidenceBundle {
+  envelope: Record<string, unknown>;
+  signers: Record<string, unknown>[];
+  auditTrail: {
+    events: Record<string, unknown>[];
+    startTime: string;
+    endTime: string;
+  };
+  blockchainVerification?: VerificationResponse;
+}
+
+export interface EvidenceBundleResponse {
+  bundle: EvidenceBundle;
 }
 
 // =============================================================================

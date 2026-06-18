@@ -13,6 +13,8 @@ import type {
   VerificationResponse,
   AnalysisResponse,
   DocumentUploadResponse,
+  DocumentDownloadResponse,
+  EvidenceBundleResponse,
   PaginatedResponse,
   ProblemDetails,
 } from "./types.js";
@@ -210,6 +212,34 @@ export class SignaTrustClient {
       "POST",
       `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/void`,
       { body: reason ? { reason } : {} },
+    );
+    return data;
+  }
+
+  /**
+   * Get a short-lived pre-signed download URL for a document. The caller
+   * fetches the bytes from `downloadUrl` directly (no API key needed there).
+   * Requires the `documents:read` scope.
+   */
+  async downloadDocument(
+    documentId: string,
+  ): Promise<DocumentDownloadResponse> {
+    const { data } = await this.request<DocumentDownloadResponse>(
+      "GET",
+      `/api/v1/documents/${encodeURIComponent(documentId)}/download`,
+    );
+    return data;
+  }
+
+  /**
+   * Fetch the full evidence bundle for an envelope: envelope, signers, audit
+   * trail, and (when anchored) blockchain verification, in one record.
+   * Requires the `envelopes:read` scope.
+   */
+  async getEvidence(envelopeId: string): Promise<EvidenceBundleResponse> {
+    const { data } = await this.request<EvidenceBundleResponse>(
+      "GET",
+      `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/evidence`,
     );
     return data;
   }
