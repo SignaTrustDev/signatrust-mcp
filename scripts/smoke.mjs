@@ -79,7 +79,7 @@ const envelopes = await run("list_envelopes (no filter)", () =>
 const firstEnvelopeId = envelopes?.data?.[0]?.id;
 if (firstEnvelopeId) {
   const envelope = await run(`get_envelope (${firstEnvelopeId})`, () =>
-    tool("get_envelope", { id: firstEnvelopeId }),
+    tool("get_envelope", { envelopeId: firstEnvelopeId }),
   );
 
   // Confirm the response matches the corrected SDK types (not the old ones).

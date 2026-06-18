@@ -354,7 +354,7 @@ async function toolCall(id, name, args, { timeoutMs = LIVE ? 15000 : 5000 } = {}
 
 // void_envelope — sanity check the new tool wires through
 {
-  const result = await toolCall(205, "void_envelope", { id: "env_fake", reason: "test" });
+  const result = await toolCall(205, "void_envelope", { envelopeId: "env_fake", reason: "test" });
   if (!LIVE) {
     const rejected =
       result?.isError === true &&
@@ -496,7 +496,7 @@ if (GREEN_PATH && !LIVE) {
 
   // Round-trip: get_envelope should return the one we just created
   if (envelope?.id) {
-    const getResult = await toolCall(303, "get_envelope", { id: envelope.id });
+    const getResult = await toolCall(303, "get_envelope", { envelopeId: envelope.id });
     let retrieved = null;
     try {
       retrieved = JSON.parse(getResult.content[0].text);
@@ -586,7 +586,7 @@ if (GREEN_PATH && !LIVE) {
   // Void the envelope we created (clean up after ourselves)
   if (envelope?.id) {
     const voidResult = await toolCall(306, "void_envelope", {
-      id: envelope.id,
+      envelopeId: envelope.id,
       reason: "e2e harness cleanup",
     });
     let voided = null;
@@ -607,7 +607,7 @@ if (GREEN_PATH && !LIVE) {
     );
 
     // Confirm void took by re-fetching
-    const reGet = await toolCall(307, "get_envelope", { id: envelope.id });
+    const reGet = await toolCall(307, "get_envelope", { envelopeId: envelope.id });
     let after = null;
     try {
       after = JSON.parse(reGet.content[0].text);
