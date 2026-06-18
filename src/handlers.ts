@@ -58,12 +58,12 @@ export const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        id: {
+        envelopeId: {
           type: "string",
-          description: "Envelope ID",
+          description: "Envelope ID (from list_envelopes or create_envelope)",
         },
       },
-      required: ["id"],
+      required: ["envelopeId"],
     },
     annotations: {
       title: "Get Envelope Details",
@@ -81,7 +81,16 @@ export const TOOLS = [
       "securityLevel to match the legal weight required: STANDARD for routine/" +
       "internal approvals; VERIFIED (adds SMS/email OTP) for employment, " +
       "vendor, or healthcare consent; CERTIFIED (adds WebAuthn biometric + " +
-      "device binding) for real estate, high-value, or regulatory signings.",
+      "device binding) for real estate, high-value, or regulatory signings. " +
+      "Note: each signer needs either an email or a phone, and you must pass " +
+      "either documentIds or templateId (not both). " +
+      "Examples:\n" +
+      "1) Single signer from an uploaded document:\n" +
+      '   {"name":"Mutual NDA","signers":[{"name":"Dana Lee","email":"dana@acme.com"}],"documentIds":["doc_abc123"]}\n' +
+      "2) Two signers with routing order (Dana first, then Sam by SMS), VERIFIED tier:\n" +
+      '   {"name":"Employment Agreement","securityLevel":"VERIFIED","signers":[{"name":"Dana Lee","email":"dana@acme.com","routingOrder":1},{"name":"Sam Ortiz","phone":"+14155550123","deliveryMethod":"SMS","routingOrder":2}],"documentIds":["doc_abc123"]}\n' +
+      "3) From a template (omit documentIds — backend copies the template doc), CERTIFIED tier:\n" +
+      '   {"name":"Lease Renewal 2026","securityLevel":"CERTIFIED","templateId":"tpl_lease","signers":[{"name":"Pat Singh","email":"pat@example.com"}],"message":"Please review and sign by Friday."}',
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -164,7 +173,7 @@ export const TOOLS = [
           description: "Optional message included in the signing notification",
         },
       },
-      required: ["signers"],
+      required: ["name", "signers"],
     },
     annotations: {
       title: "Create Envelope",
@@ -266,7 +275,7 @@ export const TOOLS = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        id: {
+        envelopeId: {
           type: "string",
           description: "Envelope ID to void",
         },
@@ -279,7 +288,7 @@ export const TOOLS = [
           maxLength: 500,
         },
       },
-      required: ["id"],
+      required: ["envelopeId"],
     },
     annotations: {
       title: "Void Envelope",
@@ -367,7 +376,7 @@ export async function handleTool(
     }
 
     case "get_envelope": {
-      const result = await client.getEnvelope(args.id as string);
+      const result = await client.getEnvelope(args.envelopeId as string);
       return success(result);
     }
 
@@ -422,7 +431,7 @@ export async function handleTool(
     }
 
     case "void_envelope": {
-      const result = await client.voidEnvelope(args.id as string, args.reason as string | undefined);
+      const result = await client.voidEnvelope(args.envelopeId as string, args.reason as string | undefined);
       return success(result);
     }
 

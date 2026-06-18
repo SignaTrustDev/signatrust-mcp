@@ -121,10 +121,10 @@ describe("list_envelopes", () => {
 // =============================================================================
 
 describe("get_envelope", () => {
-  it("should call getEnvelope with id", async () => {
+  it("should call getEnvelope with envelopeId", async () => {
     client.getEnvelope.mockResolvedValue({ id: "env_1", name: "NDA" });
 
-    const result = await handleTool(client, "get_envelope", { id: "env_1" });
+    const result = await handleTool(client, "get_envelope", { envelopeId: "env_1" });
 
     expect(client.getEnvelope).toHaveBeenCalledWith("env_1");
     const parsed = JSON.parse(result.content[0].text);
@@ -368,7 +368,7 @@ describe("void_envelope", () => {
     });
 
     const result = await handleTool(client, "void_envelope", {
-      id: "env_1",
+      envelopeId: "env_1",
       reason: "contract terms changed",
     });
 
@@ -381,7 +381,7 @@ describe("void_envelope", () => {
   it("should call voidEnvelope with undefined reason when omitted", async () => {
     client.voidEnvelope.mockResolvedValue({ id: "env_1", status: "VOIDED" });
 
-    await handleTool(client, "void_envelope", { id: "env_1" });
+    await handleTool(client, "void_envelope", { envelopeId: "env_1" });
 
     expect(client.voidEnvelope).toHaveBeenCalledWith("env_1", undefined);
   });
