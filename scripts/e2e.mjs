@@ -465,6 +465,42 @@ if (GREEN_PATH && !LIVE) {
       : uploadResult?.content?.[0]?.text?.slice(0, 140),
   );
 
+  // download_document — fetch a short-lived pre-signed URL for the uploaded
+  // document. Requires the documents:read scope; accept a clean scope gate if
+  // the key lacks it (mirrors analyze_document's plan-gate handling).
+  if (uploaded?.id) {
+    const dlResult = await toolCall(308, "download_document", {
+      documentId: uploaded.id,
+    });
+    let dl = null;
+    if (dlResult && !dlResult.isError) {
+      try {
+        dl = JSON.parse(dlResult.content[0].text);
+      } catch {
+        /* leave null */
+      }
+    }
+    const scopeGated =
+      dlResult?.isError === true &&
+      (/scope/i.test(dlResult.content[0].text) ||
+        /Forbidden/.test(dlResult.content[0].text));
+    const shapeOk =
+      typeof dl?.downloadUrl === "string" &&
+      dl.downloadUrl.startsWith("http") &&
+      typeof dl?.expiresIn === "number";
+    record(
+      scopeGated
+        ? "green: download_document scope-gated (key lacks documents:read)"
+        : "green: download_document returns a pre-signed URL",
+      shapeOk || scopeGated ? "pass" : "fail",
+      shapeOk
+        ? `name="${dl.name}" expiresIn=${dl.expiresIn}`
+        : dlResult?.content?.[0]?.text?.slice(0, 140),
+    );
+  } else {
+    record("green: download_document returns a pre-signed URL", "skip", "no document");
+  }
+
   // Create an envelope from the uploaded doc with VERIFIED tier
   let envelope = null;
   if (uploaded?.id) {
@@ -563,22 +599,56 @@ if (GREEN_PATH && !LIVE) {
     record("green: verify_blockchain returns v1 blockchain shape", "skip", "no envelope");
   }
 
-  // analyze_document — plan-gated. Accept success OR a clean 403 message.
+  // get_evidence — the full self-contained evidence bundle. On a freshly-sent
+  // (un-anchored) envelope, blockchainVerification is absent — that is expected.
+  if (envelope?.id) {
+    const evResult = await toolCall(309, "get_evidence", {
+      envelopeId: envelope.id,
+    });
+    let ev = null;
+    try {
+      ev = JSON.parse(evResult.content[0].text);
+    } catch {
+      /* leave null */
+    }
+    const b = ev?.bundle;
+    const ok =
+      !evResult?.isError &&
+      b != null &&
+      typeof b.envelope === "object" &&
+      Array.isArray(b.signers) &&
+      b.auditTrail != null &&
+      Array.isArray(b.auditTrail.events);
+    record(
+      "green: get_evidence returns a bundle (envelope + signers + auditTrail)",
+      ok ? "pass" : "fail",
+      ok
+        ? `signers=${b.signers.length} auditEvents=${b.auditTrail.events.length} anchored=${"blockchainVerification" in b}`
+        : evResult?.content?.[0]?.text?.slice(0, 140),
+    );
+  } else {
+    record("green: get_evidence returns a bundle (envelope + signers + auditTrail)", "skip", "no envelope");
+  }
+
+  // analyze_document — gated by plan AND by API-key scope (ai:analyze).
+  // Accept success OR a clean gate message (plan 403 or insufficient scope);
+  // the tool correctly surfacing either is the expected behaviour.
   if (envelope?.id) {
     const aiResult = await toolCall(305, "analyze_document", {
       envelopeId: envelope.id,
     });
     const succeeded = aiResult && !aiResult.isError;
-    const planGated =
+    const gated =
       aiResult?.isError === true &&
       (/Forbidden/.test(aiResult.content[0].text) ||
-        /plan/i.test(aiResult.content[0].text));
-    const ok = succeeded || planGated;
+        /plan/i.test(aiResult.content[0].text) ||
+        /scope/i.test(aiResult.content[0].text));
+    const ok = succeeded || gated;
     record(
       succeeded
         ? "green: analyze_document succeeded (PRO+ account)"
-        : planGated
-          ? "green: analyze_document plan-gated (expected on Free)"
+        : gated
+          ? "green: analyze_document gated (expected — needs Pro plan + ai:analyze scope)"
           : "green: analyze_document",
       ok ? "pass" : "fail",
       aiResult?.content?.[0]?.text?.slice(0, 140),
