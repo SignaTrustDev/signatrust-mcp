@@ -239,6 +239,34 @@ export const TOOLS = [
     },
   },
   {
+    name: "download_document",
+    description:
+      "Get a time-limited download URL for a document (e.g. the executed/" +
+      "signed PDF or an uploaded source file). Returns the document name and a " +
+      "pre-signed downloadUrl valid for a limited window (expiresIn seconds) — " +
+      "fetch the bytes from that URL directly; it carries its own auth and does " +
+      "not need the API key. Pass a document ID from upload_document or from an " +
+      "envelope's documents[] (see get_envelope). Requires the documents:read " +
+      "scope on your API key.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        documentId: {
+          type: "string",
+          description:
+            "Document ID (from upload_document, or from documents[].id on a " +
+            "get_envelope / list_envelopes result)",
+        },
+      },
+      required: ["documentId"],
+    },
+    annotations: {
+      title: "Download Document",
+      readOnlyHint: true,
+      destructiveHint: false,
+    },
+  },
+  {
     name: "analyze_document",
     description:
       "Run AI contract analysis (Google Gemini) on a completed envelope's " +
@@ -319,6 +347,33 @@ export const TOOLS = [
     },
     annotations: {
       title: "Verify Blockchain Anchor",
+      readOnlyHint: true,
+      destructiveHint: false,
+    },
+  },
+  {
+    name: "get_evidence",
+    description:
+      "Get the full evidence bundle for an envelope in a single record: the " +
+      "envelope, all signers, the complete hash-chained audit trail (with " +
+      "start/end timestamps), and — when the envelope has been anchored — its " +
+      "blockchain verification. This is the court-ready, self-contained proof " +
+      "of the signing: retain it or hand it to a third party who can verify " +
+      "the signing independently. Use verify_blockchain instead when you only " +
+      "need the on-chain anchor; use this when you need the whole record. " +
+      "Requires the envelopes:read scope on your API key.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        envelopeId: {
+          type: "string",
+          description: "Envelope ID to build the evidence bundle for",
+        },
+      },
+      required: ["envelopeId"],
+    },
+    annotations: {
+      title: "Get Evidence Bundle",
       readOnlyHint: true,
       destructiveHint: false,
     },
@@ -425,8 +480,18 @@ export async function handleTool(
       });
     }
 
+    case "download_document": {
+      const result = await client.downloadDocument(args.documentId as string);
+      return success(result);
+    }
+
     case "analyze_document": {
       const result = await client.analyzeEnvelope(args.envelopeId as string);
+      return success(result);
+    }
+
+    case "get_evidence": {
+      const result = await client.getEvidence(args.envelopeId as string);
       return success(result);
     }
 

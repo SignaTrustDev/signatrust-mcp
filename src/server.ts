@@ -65,7 +65,7 @@ const client = new SignaTrustClient({
 const server = new Server(
   {
     name: "signatrust",
-    version: "0.2.0",
+    version: "0.3.0",
   },
   {
     capabilities: {

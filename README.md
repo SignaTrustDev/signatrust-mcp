@@ -39,8 +39,10 @@ Add to your `claude_desktop_config.json`:
 | `create_envelope` | Create and send envelope for signing. Accepts `documentIds` (after `upload_document`) or `templateId` (backend copies the template). Supports three-tier `securityLevel`. | `envelopes:write` |
 | `list_templates` | List available document templates | `templates:read` |
 | `upload_document` | Read a local file and upload it to SignaTrust, returning a document ID for `create_envelope` | `documents:write` |
+| `download_document` | Get a time-limited pre-signed URL to download a document (e.g. the executed PDF) | `documents:read` |
 | `analyze_document` | Run AI contract analysis on an envelope (Gemini-powered risk/sentiment review, plan-gated) | `ai:analyze` |
 | `verify_blockchain` | Verify Solana anchor and return composite hash + file hash + explorer URL | `envelopes:read` |
+| `get_evidence` | Get the full court-ready evidence bundle (envelope, signers, audit trail, blockchain verification) | `envelopes:read` |
 
 **Three-tier security.** `create_envelope` accepts `securityLevel`: `STANDARD` (bearer token only), `VERIFIED` (adds SMS/email OTP — recommended for employment, vendor, or healthcare consent), or `CERTIFIED` (adds WebAuthn biometric + device binding — recommended for real estate, high-value, or regulatory signings).
 
@@ -50,10 +52,11 @@ Create an API key at **Settings > API Keys** in your SignaTrust dashboard. Assig
 
 | Scope | Tools Enabled |
 |-------|--------------|
-| `envelopes:read` | list_envelopes, get_envelope, verify_blockchain |
+| `envelopes:read` | list_envelopes, get_envelope, verify_blockchain, get_evidence |
 | `envelopes:write` | create_envelope |
 | `templates:read` | list_templates |
 | `documents:write` | upload_document |
+| `documents:read` | download_document |
 | `ai:analyze` | analyze_document |
 
 ## Environment Variables
