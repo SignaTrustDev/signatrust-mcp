@@ -48,6 +48,7 @@ export const TOOLS = [
       title: "List Envelopes",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -69,6 +70,7 @@ export const TOOLS = [
       title: "Get Envelope Details",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -179,6 +181,7 @@ export const TOOLS = [
       title: "Create Envelope",
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -201,6 +204,7 @@ export const TOOLS = [
       title: "List Templates",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -236,6 +240,7 @@ export const TOOLS = [
       title: "Upload Document",
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -264,6 +269,7 @@ export const TOOLS = [
       title: "Download Document",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -288,6 +294,7 @@ export const TOOLS = [
       title: "Analyze Document (AI)",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -322,6 +329,7 @@ export const TOOLS = [
       title: "Void Envelope",
       readOnlyHint: false,
       destructiveHint: true,
+      openWorldHint: true,
     },
   },
   {
@@ -349,6 +357,7 @@ export const TOOLS = [
       title: "Verify Blockchain Anchor",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
   {
@@ -376,6 +385,7 @@ export const TOOLS = [
       title: "Get Evidence Bundle",
       readOnlyHint: true,
       destructiveHint: false,
+      openWorldHint: true,
     },
   },
 ];
