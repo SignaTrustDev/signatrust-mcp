@@ -16,7 +16,7 @@ For sensitive reports, please request a PGP key in your initial email and we wil
 
 - This MCP server (`@signatrust/mcp-server`)
 - The vendored SignaTrust SDK under `src/vendor/signatrust-sdk/`
-- The published MCPB bundle (`signatrust.mcpb`)
+- The published MCPB bundle (`signatrust-mcp.mcpb`)
 
 **Out of scope**
 
