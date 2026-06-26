@@ -30,6 +30,59 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
+### Cursor
+
+Add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per-project):
+
+```json
+{
+  "mcpServers": {
+    "signatrust": {
+      "command": "npx",
+      "args": ["-y", "@signatrust/mcp-server"],
+      "env": {
+        "SIGNATRUST_API_KEY": "sk_live_your_key_here"
+      }
+    }
+  }
+}
+```
+
+### VS Code
+
+Add to `.vscode/mcp.json` (note the top-level key is `servers`, not `mcpServers`):
+
+```json
+{
+  "servers": {
+    "signatrust": {
+      "command": "npx",
+      "args": ["-y", "@signatrust/mcp-server"],
+      "env": {
+        "SIGNATRUST_API_KEY": "sk_live_your_key_here"
+      }
+    }
+  }
+}
+```
+
+To keep the key out of the file, use an input prompt instead of `env`:
+
+```json
+{
+  "inputs": [
+    { "id": "signatrust-key", "type": "promptString", "description": "SignaTrust API key", "password": true }
+  ],
+  "servers": {
+    "signatrust": {
+      "command": "npx",
+      "args": ["-y", "@signatrust/mcp-server"],
+      "env": { "SIGNATRUST_API_KEY": "${input:signatrust-key}" }
+    }
+  }
+}
+```
+
 ## Available Tools
 
 | Tool | Description | Required Scope |
