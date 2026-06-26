@@ -3,7 +3,7 @@
   "name": "io.signatrust/mcp-server",
   "title": "SignaTrust",
   "description": "Blockchain-anchored e-signatures: send envelopes, manage templates, verify anchors on Solana.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "repository": {
     "url": "https://github.com/SignaTrustDev/signatrust-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@signatrust/mcp-server",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
