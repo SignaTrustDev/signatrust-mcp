@@ -1,5 +1,6 @@
 {
   "name": "@signatrust/mcp-server",
+  "mcpName": "io.signatrust/mcp-server",
   "version": "0.3.1",
   "description": "Model Context Protocol server for the SignaTrust document signing API",
   "type": "module",

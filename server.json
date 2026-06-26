@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.signatrust/mcp-server",
+  "title": "SignaTrust",
+  "description": "Blockchain-anchored e-signatures over the SignaTrust API: create and send signing envelopes, upload and download documents, run AI contract analysis, void envelopes, fetch the court-ready evidence bundle, and verify a document's Solana anchor independently.",
+  "version": "0.3.1",
+  "repository": {
+    "url": "https://github.com/SignaTrustDev/signatrust-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@signatrust/mcp-server",
+      "version": "0.3.1",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "SIGNATRUST_API_KEY",
+          "description": "SignaTrust API key (starts with sk_live_). Create one at Settings -> API keys.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "SIGNATRUST_API_URL",
+          "description": "Override the API base URL. Defaults to https://app.signatrust.io; set for self-hosted or local development.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
