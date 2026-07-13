@@ -1,5 +1,16 @@
 # @signatrust/mcp-server
 
+> Send and verify e-signatures from Claude — zero-custody, with independently verifiable cryptographic evidence for every signature.
+
+[![npm](https://img.shields.io/npm/v/@signatrust/mcp-server)](https://www.npmjs.com/package/@signatrust/mcp-server)
+[![downloads](https://img.shields.io/npm/dm/@signatrust/mcp-server)](https://www.npmjs.com/package/@signatrust/mcp-server)
+[![MCP Registry](https://img.shields.io/badge/MCP-registry-blue)](https://registry.modelcontextprotocol.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+<!-- Demo slot: record a ~10s GIF of Claude sending an envelope end-to-end (use the
+     Natural Language Examples below), save it to docs/demo.gif, and add here:
+     ![SignaTrust MCP demo](docs/demo.gif) -->
+
 Model Context Protocol (MCP) server for the SignaTrust document signing API. Enables AI assistants like Claude to create envelopes, manage templates, check signing status, and verify blockchain anchors via natural language.
 
 ## Quick Start
