@@ -270,4 +270,11 @@ export interface CreateEnvelopeInput {
   templateId?: string;
   message?: string;
   securityLevel?: SecurityLevel;
+  /**
+   * When true, the envelope is created as a DRAFT and NOT dispatched — no signer
+   * is notified. The MCP `create_envelope` tool always sets this so the assistant
+   * cannot send at the prompt level; dispatch is a separate, explicit
+   * `send_envelope` step. Default (false) is create-and-send.
+   */
+  draft?: boolean;
 }

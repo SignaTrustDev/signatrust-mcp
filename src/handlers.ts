@@ -76,10 +76,14 @@ export const TOOLS = [
   {
     name: "create_envelope",
     description:
-      "Create and send a new envelope for signing. Requires a name, at least " +
+      "Create a new envelope as a DRAFT for review. This does NOT send it — no " +
+      "signer is notified. Show the user the draft, and only dispatch it when " +
+      "they explicitly confirm, by calling send_envelope. (Sending is legally " +
+      "binding and irreversible, so it is deliberately a separate step.) " +
+      "Requires a name, at least " +
       "one signer, and at least one document (pass document IDs from " +
       "upload_document, or pass a templateId to create from a template). " +
-      "Signers are notified via their chosen delivery method. Use " +
+      "Use " +
       "securityLevel to match the legal weight required: STANDARD for routine/" +
       "internal approvals; VERIFIED (adds SMS/email OTP) for employment, " +
       "vendor, or healthcare consent; CERTIFIED (adds WebAuthn biometric + " +
@@ -181,6 +185,37 @@ export const TOOLS = [
       title: "Create Envelope",
       readOnlyHint: false,
       destructiveHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
+    name: "send_envelope",
+    description:
+      "⚠️ SEND a DRAFT envelope to its recipients — this dispatches the signing " +
+      "invitations, is legally binding, and is irreversible. Only call this after " +
+      "the user has reviewed the draft (from create_envelope) and explicitly " +
+      "confirmed. It transitions the envelope to SENT and notifies the first " +
+      "routing-order signers. " +
+      "IMPORTANT: a SENT status does NOT mean recipients were reached. Read the " +
+      "`delivery` object in the response and branch on `delivery.state`: " +
+      "DELIVERED_ALL (everyone got the invite), DELIVERED_PARTIAL (some did not — " +
+      "tell the user who, from `delivery.signers`), DELIVERED_NONE (nobody was " +
+      "reached; the envelope is sent but stuck — do not report it as delivered). " +
+      "`delivery.detail` is a plain-language summary you can relay.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        envelopeId: {
+          type: "string",
+          description: "ID of the draft envelope to send (from create_envelope)",
+        },
+      },
+      required: ["envelopeId"],
+    },
+    annotations: {
+      title: "Send Envelope",
+      readOnlyHint: false,
+      destructiveHint: true,
       openWorldHint: true,
     },
   },
@@ -446,6 +481,9 @@ export async function handleTool(
     }
 
     case "create_envelope": {
+      // Always a DRAFT: the assistant cannot send at the prompt level. The
+      // server enforces that a DRAFT notifies no one; dispatch is the separate,
+      // explicit send_envelope step after the user reviews.
       const result = await client.createEnvelope({
         name: args.name as string,
         signers: args.signers as CreateEnvelopeSigner[],
@@ -453,7 +491,13 @@ export async function handleTool(
         templateId: args.templateId as string | undefined,
         message: args.message as string | undefined,
         securityLevel: args.securityLevel as SecurityLevel | undefined,
+        draft: true,
       });
+      return success(result);
+    }
+
+    case "send_envelope": {
+      const result = await client.sendEnvelope(args.envelopeId as string);
       return success(result);
     }
 

@@ -217,6 +217,21 @@ export class SignaTrustClient {
   }
 
   /**
+   * Dispatch a DRAFT envelope to its recipients. This is the only call that
+   * notifies signers; it is legally binding and irreversible. Requires the
+   * `envelopes:send` scope. The response's `delivery` object reports whether
+   * recipients were actually reached (a SENT status does not imply delivery).
+   */
+  async sendEnvelope(envelopeId: string): Promise<EnvelopeDetail> {
+    const { data } = await this.request<EnvelopeDetail>(
+      "POST",
+      `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/send`,
+      { body: {} },
+    );
+    return data;
+  }
+
+  /**
    * Get a short-lived pre-signed download URL for a document. The caller
    * fetches the bytes from `downloadUrl` directly (no API key needed there).
    * Requires the `documents:read` scope.
