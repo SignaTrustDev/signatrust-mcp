@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # TIER 1 (required): the vendored SDK compiles and its enums match the LOCAL
+  # copy of the contract. Catches a type edited without its copy.
+  check:
+    name: Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm ci
+
+      # Enum types are tuple-derived; tsc proves the vendored SDK still compiles.
+      - run: npm run typecheck
+
+      # Includes contract-conformance.test.ts: the vendored enums must match the
+      # local contract/agent-contract.json.
+      - run: npm test
+
+  # TIER 2 (alarm, not required): is our LOCAL copy stale vs the upstream
+  # canonical (signatrust_new)? Fires only on genuinely-detected drift. It stays
+  # INERT (warn, never red) when it can't reach upstream — before the token is
+  # set, or during bootstrap when the upstream file isn't on main yet — so it is
+  # never a false alarm. Arm it by adding the CONTRACT_UPSTREAM_TOKEN secret (a
+  # token with read access to the private upstream repo).
+  contract-drift-alarm:
+    name: Contract drift alarm (copy vs upstream)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compare vendored contract copy against upstream
+        env:
+          GH_TOKEN: ${{ secrets.CONTRACT_UPSTREAM_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::CONTRACT_UPSTREAM_TOKEN not set — tier-2 drift alarm is INERT. Add the secret to arm it."
+            exit 0
+          fi
+          if ! npm run contract:resync; then
+            echo "::warning::Could not fetch upstream contract (bootstrap or permissions) — drift alarm inert this run."
+            exit 0
+          fi
+          if ! git diff --quiet contract/agent-contract.json; then
+            echo "::error::Vendored contract/agent-contract.json is STALE vs upstream. Run 'npm run contract:resync' and commit."
+            git --no-pager diff contract/agent-contract.json
+            exit 1
+          fi
+          echo "Vendored contract copy is in sync with upstream."
