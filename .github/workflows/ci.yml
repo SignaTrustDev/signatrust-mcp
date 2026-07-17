@@ -19,11 +19,12 @@ jobs:
         with:
           node-version: '20'
 
-      # npm install, not npm ci: `npm ci` deterministically fails here on the
-      # optional-deps bug (npm/cli#4828) — it skips vitest's platform-specific
-      # rollup native binary (@rollup/rollup-linux-x64-gnu), which is present in
-      # the lockfile but not installed. npm install resolves the platform optional.
-      - run: npm install
+      # The committed lockfile triggers npm's optional-deps bug (npm/cli#4828):
+      # both `npm ci` and `npm install` skip vitest's platform-specific rollup
+      # binary (@rollup/rollup-linux-x64-gnu) on linux. The bug's own remedy is to
+      # drop the lockfile before installing so npm resolves the platform optional
+      # fresh. Only the ephemeral runner copy is removed; the repo lockfile stays.
+      - run: rm -f package-lock.json && npm install
 
       # Enum types are tuple-derived; tsc proves the vendored SDK still compiles.
       - run: npm run typecheck
