@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # TIER 1 (required): the vendored SDK compiles and its enums match the LOCAL
+  # copy of the contract. Catches a type edited without its copy.
+  check:
+    name: Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The committed lockfile triggers npm's optional-deps bug (npm/cli#4828):
+      # both `npm ci` and `npm install` skip vitest's platform-specific rollup
+      # binary (@rollup/rollup-linux-x64-gnu) on linux. The bug's own remedy is to
+      # drop the lockfile before installing so npm resolves the platform optional
+      # fresh. Only the ephemeral runner copy is removed; the repo lockfile stays.
+      - run: rm -f package-lock.json && npm install
+
+      # Enum types are tuple-derived; tsc proves the vendored SDK still compiles.
+      - run: npm run typecheck
+
+      # Includes contract-conformance.test.ts: the vendored enums must match the
+      # local contract/agent-contract.json.
+      - run: npm test
+
+  # TIER 2 (alarm, not required): is our LOCAL copy stale vs the upstream
+  # canonical (signatrust_new)? INERT ONLY WHEN UNARMED — no CONTRACT_READ_TOKEN
+  # secret means we skip (warn, pass). Once armed, ANY failure is LOUD (red),
+  # using the exit taxonomy shared with mobile-signer so a red alarm means the
+  # same thing on both: 1 drift · 2 auth/transport · 3 upstream-missing (404).
+  # Arm it by adding CONTRACT_READ_TOKEN (a fine-grained PAT with Contents:read
+  # on the private Signatrust_v4 repo).
+  contract-drift-alarm:
+    name: Contract drift alarm (copy vs upstream)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compare vendored contract copy against upstream
+        env:
+          CONTRACT_READ_TOKEN: ${{ secrets.CONTRACT_READ_TOKEN }}
+        run: |
+          if [ -z "$CONTRACT_READ_TOKEN" ]; then
+            echo "::warning::CONTRACT_READ_TOKEN not set — tier-2 drift alarm is INERT (unarmed). Add the secret to arm it."
+            exit 0
+          fi
+          # Armed: contract:check exits 0 in-sync / 1 drift / 2 auth / 3 upstream-missing.
+          set +e
+          npm run --silent contract:check
+          code=$?
+          set -e
+          case "$code" in
+            0) echo "Vendored contract copy is in sync with upstream." ;;
+            1) echo "::error::DRIFT — vendored contract/agent-contract.json is stale vs upstream. Run 'npm run contract:resync' and commit."; exit 1 ;;
+            2) echo "::error::AUTH — CONTRACT_READ_TOKEN cannot read the upstream contract (needs Contents:read on Signatrust_v4)."; exit 1 ;;
+            3) echo "::error::UPSTREAM-MISSING — canonical contract is not on Signatrust_v4 main (merge-order) or the token can't see it."; exit 1 ;;
+            *) echo "::error::contract:check failed unexpectedly (exit $code)."; exit 1 ;;
+          esac

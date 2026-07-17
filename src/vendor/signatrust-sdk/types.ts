@@ -9,28 +9,38 @@
 
 // =============================================================================
 // Enums
+//
+// Each enum is defined ONCE as a runtime tuple; the type is derived from it.
+// contract-conformance.test.ts asserts these tuples equal the canonical
+// contract/agent-contract.json (synced from signatrust_new). A backend enum
+// change the SDK hasn't picked up turns that test red instead of shipping a
+// consumer that can't name a state an envelope is actually in.
 // =============================================================================
 
-export type EnvelopeStatus =
-  | "DRAFT"
-  | "SENT"
-  | "NEEDS_SIGNATURE"
-  | "COMPLETED"
-  | "VOIDED"
-  | "DECLINED";
+export const ENVELOPE_STATUSES = [
+  "DRAFT",
+  "SENT",
+  "NEEDS_SIGNATURE",
+  "AWAITING_ENCRYPTION",
+  "COMPLETED",
+  "VOIDED",
+  "DECLINED",
+  "NEEDS_REVISION",
+  "PENDING_PRINCIPAL_APPROVAL",
+] as const;
+export type EnvelopeStatus = (typeof ENVELOPE_STATUSES)[number];
 
-export type SignerStatus =
-  | "PENDING"
-  | "SENT"
-  | "NEEDS_SIGNATURE"
-  | "SIGNED"
-  | "DECLINED";
+export const SIGNER_STATUSES = ["PENDING", "SENT", "VIEWED", "SIGNED", "DECLINED"] as const;
+export type SignerStatus = (typeof SIGNER_STATUSES)[number];
 
-export type SignerRole = "SIGNER" | "OBSERVER";
+export const SIGNER_ROLES = ["SIGNER", "OBSERVER"] as const;
+export type SignerRole = (typeof SIGNER_ROLES)[number];
 
-export type DeliveryMethod = "EMAIL" | "SMS" | "BOTH";
+export const DELIVERY_METHODS = ["EMAIL", "SMS", "BOTH", "WHATSAPP"] as const;
+export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
 
-export type SecurityLevel = "STANDARD" | "VERIFIED" | "CERTIFIED";
+export const SECURITY_LEVELS = ["STANDARD", "VERIFIED", "CERTIFIED"] as const;
+export type SecurityLevel = (typeof SECURITY_LEVELS)[number];
 
 // =============================================================================
 // RFC 7807 Problem Details

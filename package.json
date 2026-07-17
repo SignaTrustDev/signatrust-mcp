@@ -21,6 +21,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "bundle": "npm run build && npx @anthropic-ai/mcpb pack .",
+    "contract:resync": "node scripts/contract-resync.mjs",
+    "contract:check": "node scripts/contract-resync.mjs --check",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "smoke:published": "node scripts/smoke-published.mjs",
     "e2e": "npm run build && node scripts/e2e.mjs",
