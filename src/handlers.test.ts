@@ -20,6 +20,7 @@ function createMockClient() {
     downloadDocument: vi.fn(),
     analyzeEnvelope: vi.fn(),
     voidEnvelope: vi.fn(),
+    sendEnvelope: vi.fn(),
     verifyBlockchain: vi.fn(),
     getEvidence: vi.fn(),
   } as unknown as SignaTrustClient & {
@@ -32,6 +33,7 @@ function createMockClient() {
     downloadDocument: ReturnType<typeof vi.fn>;
     analyzeEnvelope: ReturnType<typeof vi.fn>;
     voidEnvelope: ReturnType<typeof vi.fn>;
+    sendEnvelope: ReturnType<typeof vi.fn>;
     verifyBlockchain: ReturnType<typeof vi.fn>;
     getEvidence: ReturnType<typeof vi.fn>;
   };
@@ -54,6 +56,7 @@ describe("TOOLS", () => {
       "list_envelopes",
       "get_envelope",
       "create_envelope",
+      "send_envelope",
       "list_templates",
       "upload_document",
       "download_document",
@@ -196,6 +199,23 @@ describe("create_envelope", () => {
     );
   });
 
+  // Safety: create_envelope must NEVER dispatch. It always creates a DRAFT so the
+  // assistant cannot send at the prompt level; dispatch is the separate
+  // send_envelope step. Before this, create_envelope create-and-sent immediately,
+  // so a Claude Desktop / Cursor user's agent could send a legally-binding
+  // envelope with no review.
+  it("should ALWAYS create a draft (never send at the prompt level)", async () => {
+    client.createEnvelope.mockResolvedValue({ id: "env_new", name: "Contract", status: "DRAFT" });
+
+    await handleTool(client, "create_envelope", {
+      name: "Contract",
+      signers: [{ name: "Alice", email: "alice@example.com" }],
+      documentIds: ["doc_1"],
+    });
+
+    expect(client.createEnvelope).toHaveBeenCalledWith(expect.objectContaining({ draft: true }));
+  });
+
   it("should expose securityLevel enum in the tool schema", () => {
     const tool = TOOLS.find((t) => t.name === "create_envelope");
     const props = tool?.inputSchema.properties as Record<
@@ -214,6 +234,34 @@ describe("create_envelope", () => {
     const props = tool?.inputSchema.properties as Record<string, unknown>;
     expect(props.documentIds).toBeDefined();
     expect(props.templateId).toBeDefined();
+  });
+});
+
+// =============================================================================
+// send_envelope — the only dispatch path (paired with draft-only create_envelope)
+// =============================================================================
+
+describe("send_envelope", () => {
+  it("should dispatch the draft via sendEnvelope and return the delivery outcome", async () => {
+    client.sendEnvelope.mockResolvedValue({
+      id: "env_1",
+      status: "SENT",
+      delivery: { state: "DELIVERED_ALL", notifiedCount: 1, attemptedCount: 1 },
+    });
+
+    const result = await handleTool(client, "send_envelope", { envelopeId: "env_1" });
+
+    expect(client.sendEnvelope).toHaveBeenCalledWith("env_1");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.status).toBe("SENT");
+    // The delivery discriminator must survive to the agent (raw-JSON passthrough).
+    expect(parsed.delivery.state).toBe("DELIVERED_ALL");
+  });
+
+  it("should be registered as a destructive tool", () => {
+    const tool = TOOLS.find((t) => t.name === "send_envelope");
+    expect(tool).toBeDefined();
+    expect(tool?.annotations?.destructiveHint).toBe(true);
   });
 });
 
