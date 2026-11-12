@@ -23,6 +23,7 @@ function createMockClient() {
     sendEnvelope: vi.fn(),
     verifyBlockchain: vi.fn(),
     getEvidence: vi.fn(),
+    getEvidenceBundle: vi.fn(),
   } as unknown as SignaTrustClient & {
     listEnvelopes: ReturnType<typeof vi.fn>;
     getEnvelope: ReturnType<typeof vi.fn>;
@@ -36,6 +37,7 @@ function createMockClient() {
     sendEnvelope: ReturnType<typeof vi.fn>;
     verifyBlockchain: ReturnType<typeof vi.fn>;
     getEvidence: ReturnType<typeof vi.fn>;
+    getEvidenceBundle: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -64,7 +66,45 @@ describe("TOOLS", () => {
       "void_envelope",
       "verify_blockchain",
       "get_evidence",
+      "get_evidence_bundle",
     ]);
+  });
+
+  it("should tell the agent get_evidence and download_document are not the verifiable bundle", () => {
+    const describe = (name: string) => TOOLS.find((t) => t.name === name)?.description ?? "";
+    expect(describe("get_evidence")).toContain("no PDF and no signed manifest");
+    expect(describe("get_evidence")).toContain("get_evidence_bundle");
+    expect(describe("get_evidence")).not.toContain("court-ready");
+    expect(describe("download_document")).toContain("This is the PDF alone");
+    expect(describe("download_document")).toContain("get_evidence_bundle");
+  });
+
+  it("should match the hosted get_evidence_bundle: same name, one envelopeId input, same refusal codes", () => {
+    const tool = TOOLS.find((t) => t.name === "get_evidence_bundle");
+    expect(tool?.inputSchema).toEqual({
+      type: "object",
+      properties: { envelopeId: { type: "string", description: "ID of a COMPLETED envelope" } },
+      required: ["envelopeId"],
+    });
+    for (const code of ["ENVELOPE_NOT_COMPLETED", "BLIND_CUSTODY", "DOCUMENT_DESTROYED"]) {
+      expect(tool?.description).toContain(code);
+    }
+    expect(tool?.annotations.readOnlyHint).toBe(true);
+  });
+
+  it("should say analyze_document sends the document to server-side AI and needs per-document consent", () => {
+    const tool = TOOLS.find((t) => t.name === "analyze_document");
+    expect(tool?.description).toContain("sent to SignaTrust's servers");
+    expect(tool?.description).toContain("consent for THIS document");
+    expect(tool?.description).not.toContain("free accounts receive a 403");
+    expect(tool?.annotations.readOnlyHint).toBe(false);
+  });
+
+  it("should say create_envelope stages a draft and send_envelope sends", () => {
+    const describe = (name: string) => TOOLS.find((t) => t.name === name)?.description ?? "";
+    expect(describe("create_envelope")).toContain("DRAFT");
+    expect(describe("create_envelope")).toContain("does NOT send");
+    expect(describe("send_envelope")).toContain("SEND");
   });
 
   it("should have input schemas and descriptions for all tools", () => {
@@ -522,6 +562,31 @@ describe("get_evidence", () => {
     expect(parsed.bundle.envelope.id).toBe("env_1");
     expect(parsed.bundle.auditTrail.events).toHaveLength(2);
     expect(parsed.bundle.blockchainVerification.verified).toBe(true);
+  });
+});
+
+// =============================================================================
+// get_evidence_bundle
+// =============================================================================
+
+describe("get_evidence_bundle", () => {
+  it("should call getEvidenceBundle with envelopeId and pass the link through untouched", async () => {
+    const link = {
+      envelopeId: "env_1",
+      url: "https://app.signatrust.io/api/public/evidence-bundle-links/" + "A".repeat(43),
+      expiresAt: "2026-11-12T20:15:00.000Z",
+      sha256: "a".repeat(64),
+      signingKeyFingerprint: "aws-kms:" + "b".repeat(64),
+      sizeBytes: 123456,
+      filename: "evidence-bundle-env_1.sigtrust.zip",
+      singleUse: true,
+    };
+    client.getEvidenceBundle.mockResolvedValue(link);
+
+    const result = await handleTool(client, "get_evidence_bundle", { envelopeId: "env_1" });
+
+    expect(client.getEvidenceBundle).toHaveBeenCalledWith("env_1");
+    expect(JSON.parse(result.content[0].text)).toEqual(link);
   });
 });
 

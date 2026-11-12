@@ -100,6 +100,16 @@ export function formatApiError(
       message = detail ?? `Request failed with status ${status}.`;
   }
 
+  // A coded refusal (get_evidence_bundle's 409, the AI switch's 403) keeps its
+  // code, as the hosted connector relays it, so an agent can branch on it.
+  const code =
+    body && typeof body === "object" && typeof (body as { code?: unknown }).code === "string"
+      ? (body as unknown as { code: string }).code
+      : undefined;
+  if (code && /^[A-Z][A-Z0-9_]{1,63}$/.test(code) && status >= 400 && status < 500) {
+    message = `${message} [code: ${code}]`;
+  }
+
   return {
     content: [{ type: "text", text: message }],
     isError: true,

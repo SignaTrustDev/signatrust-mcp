@@ -217,12 +217,13 @@ export interface VerificationResponse {
 // =============================================================================
 
 /**
- * Self-contained evidence record from GET /api/v1/envelopes/{id}/evidence.
+ * Evidence record from GET /api/v1/envelopes/{id}/evidence, as JSON.
  *
- * Bundles the envelope, its signers, the full audit trail, and (when anchored)
- * the blockchain verification into one record so it can be retained or handed
- * to a third party as court-ready proof. The nested envelope/signer/audit-event
- * objects are passed through verbatim from the backend.
+ * The envelope, its signers, the full audit trail, and (when anchored) the
+ * blockchain verification in one record. It carries no PDF and no signed
+ * manifest, so it is not the verifiable artifact: for that, see
+ * EvidenceBundleLinkResponse. The nested envelope/signer/audit-event objects are
+ * passed through verbatim from the backend.
  */
 export interface EvidenceBundle {
   envelope: Record<string, unknown>;
@@ -238,6 +239,32 @@ export interface EvidenceBundle {
 export interface EvidenceBundleResponse {
   bundle: EvidenceBundle;
 }
+
+/**
+ * Response from GET /api/v1/envelopes/{id}/evidence/bundle: a single-use link to
+ * the sealed evidence bundle ZIP (the signed PDF, signer records and audit trail,
+ * with a manifest signed by SignaTrust's published key).
+ *
+ * `sha256` is the SHA-256 of the exact bytes the link serves. The link works
+ * once and expires at `expiresAt`. In HIPAA mode the API returns only
+ * `envelopeId`, `url`, `expiresAt`, `sha256` and `signingKeyFingerprint`.
+ */
+export interface EvidenceBundleLinkResponse {
+  envelopeId: string;
+  url: string;
+  expiresAt: string;
+  sha256: string;
+  signingKeyFingerprint: string;
+  sizeBytes?: number;
+  filename?: string;
+  singleUse?: true;
+}
+
+/**
+ * The `code` on a 409 from GET /api/v1/envelopes/{id}/evidence/bundle
+ * (V1EvidenceBundleRefusalCode in contract/agent-contract.json).
+ */
+export type EvidenceBundleRefusalCode = "ENVELOPE_NOT_COMPLETED" | "BLIND_CUSTODY" | "DOCUMENT_DESTROYED";
 
 // =============================================================================
 // AI Analysis

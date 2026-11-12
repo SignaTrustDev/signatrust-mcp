@@ -286,7 +286,9 @@ export const TOOLS = [
       "pre-signed downloadUrl valid for a limited window (expiresIn seconds) — " +
       "fetch the bytes from that URL directly; it carries its own auth and does " +
       "not need the API key. Pass a document ID from upload_document or from an " +
-      "envelope's documents[] (see get_envelope). Requires the documents:read " +
+      "envelope's documents[] (see get_envelope). This is the PDF alone, with " +
+      "no audit trail and no signed manifest, so it is not the verifiable " +
+      "evidence: for that, use get_evidence_bundle. Requires the documents:read " +
       "scope on your API key.",
     inputSchema: {
       type: "object" as const,
@@ -310,11 +312,16 @@ export const TOOLS = [
   {
     name: "analyze_document",
     description:
-      "Run AI contract analysis (Google Gemini) on a completed envelope's " +
-      "document. Returns a structured report covering risk assessment, " +
-      "flagged clauses, and overall sentiment (SAFE / CAUTION / RISKY). " +
-      "Plan-gated: free accounts receive a 403; upgrade to Pro Lite or above " +
-      "to use this. Surface the 403 message to the user rather than retrying.",
+      "Run AI contract analysis on an envelope's document (any status, DRAFT " +
+      "included). The document is sent to SignaTrust's servers and analysed " +
+      "there by a third-party AI model (Google Gemini), so ask the user for " +
+      "explicit consent for THIS document before calling it: SignaTrust's " +
+      "policy is that server-side AI on a document needs per-document consent. " +
+      "Returns a structured report covering risk assessment, flagged clauses, " +
+      "and overall sentiment (SAFE / CAUTION / RISKY). Available on every plan. " +
+      "Refused with a 403 when the organization has switched AI processing " +
+      "off or is in HIPAA mode; surface that message rather than retrying. " +
+      "Each call runs a new, paid AI analysis.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -327,7 +334,7 @@ export const TOOLS = [
     },
     annotations: {
       title: "Analyze Document (AI)",
-      readOnlyHint: true,
+      readOnlyHint: false,
       destructiveHint: false,
       openWorldHint: true,
     },
@@ -398,26 +405,61 @@ export const TOOLS = [
   {
     name: "get_evidence",
     description:
-      "Get the full evidence bundle for an envelope in a single record: the " +
-      "envelope, all signers, the complete hash-chained audit trail (with " +
-      "start/end timestamps), and — when the envelope has been anchored — its " +
-      "blockchain verification. This is the court-ready, self-contained proof " +
-      "of the signing: retain it or hand it to a third party who can verify " +
-      "the signing independently. Use verify_blockchain instead when you only " +
-      "need the on-chain anchor; use this when you need the whole record. " +
-      "Requires the envelopes:read scope on your API key.",
+      "Get an envelope's evidence record as JSON: the envelope, all signers, " +
+      "the hash-chained audit trail (with start/end timestamps), and — when " +
+      "the envelope has been anchored — its blockchain verification. This is a " +
+      "record to read, not the sealed bundle: it carries no PDF and no signed " +
+      "manifest, so a third party cannot verify it on its own. For the " +
+      "verifiable artifact, use get_evidence_bundle. Use verify_blockchain when " +
+      "you only need the on-chain anchor. Requires the envelopes:read scope on " +
+      "your API key.",
     inputSchema: {
       type: "object" as const,
       properties: {
         envelopeId: {
           type: "string",
-          description: "Envelope ID to build the evidence bundle for",
+          description: "Envelope ID to get the evidence record for",
         },
       },
       required: ["envelopeId"],
     },
     annotations: {
-      title: "Get Evidence Bundle",
+      title: "Get Evidence Record",
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
+    name: "get_evidence_bundle",
+    description:
+      "Get a download link for a completed envelope's sealed evidence bundle: " +
+      "a ZIP holding the final signed PDF, the signer records and the " +
+      "hash-chained audit trail, with a manifest signed by SignaTrust's " +
+      "published key (listed at https://www.signatrust.io/trust/keys). Returns " +
+      "url, expiresAt, sha256 (of the ZIP bytes), sizeBytes and " +
+      "signingKeyFingerprint. The link works ONCE and expires after 15 " +
+      "minutes: fetch it with a plain HTTP GET (no auth header) straight to a " +
+      "file, and do not pass the ZIP's bytes through the conversation. Check " +
+      "the file's SHA-256 against sha256, then verify it at " +
+      "https://www.signatrust.io/verify. Refused with HTTP 409 and a code: " +
+      "ENVELOPE_NOT_COMPLETED; BLIND_CUSTODY (SignaTrust's servers cannot open " +
+      "a blind-custody document, so the bundle is assembled in the SignaTrust " +
+      "web app); DOCUMENT_DESTROYED (the signed document was destroyed after " +
+      "delivery; use get_evidence and verify_blockchain instead). Requires the " +
+      "envelopes:read scope on your API key.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        envelopeId: {
+          type: "string",
+          description: "ID of a COMPLETED envelope",
+        },
+      },
+      required: ["envelopeId"],
+    },
+    annotations: {
+      title: "Get Evidence Bundle (download link)",
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: true,
@@ -546,6 +588,11 @@ export async function handleTool(
 
     case "get_evidence": {
       const result = await client.getEvidence(args.envelopeId as string);
+      return success(result);
+    }
+
+    case "get_evidence_bundle": {
+      const result = await client.getEvidenceBundle(args.envelopeId as string);
       return success(result);
     }
 

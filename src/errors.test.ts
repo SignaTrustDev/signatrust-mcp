@@ -73,6 +73,24 @@ describe("formatApiError", () => {
     expect(result.content[0].text).toBe("Envelope already sent");
   });
 
+  it("should relay a refusal code the way the hosted connector does", () => {
+    const result = formatApiError(409, {
+      type: "https://signatrust.io/problems/evidence-bundle-unavailable",
+      title: "Evidence Bundle Unavailable",
+      status: 409,
+      detail: "This is a blind-custody envelope.",
+      code: "BLIND_CUSTODY",
+    } as never);
+    expect(result.content[0].text).toBe("This is a blind-custody envelope. [code: BLIND_CUSTODY]");
+  });
+
+  it("should not relay a code that is not enum-shaped, or on a 5xx", () => {
+    const odd = formatApiError(409, { title: "x", status: 409, detail: "d", code: "jane doe" } as never);
+    const fiveHundred = formatApiError(500, { title: "x", status: 500, detail: "d", code: "BOOM" } as never);
+    expect(odd.content[0].text).toBe("d");
+    expect(fiveHundred.content[0].text).not.toContain("[code:");
+  });
+
   it("should format 429 with retryAfter", () => {
     const result = formatApiError(429, null, "30");
     expect(result.content[0].text).toContain("Rate limited");

@@ -15,6 +15,7 @@ import type {
   DocumentUploadResponse,
   DocumentDownloadResponse,
   EvidenceBundleResponse,
+  EvidenceBundleLinkResponse,
   PaginatedResponse,
   ProblemDetails,
 } from "./types.js";
@@ -247,14 +248,29 @@ export class SignaTrustClient {
   }
 
   /**
-   * Fetch the full evidence bundle for an envelope: envelope, signers, audit
-   * trail, and (when anchored) blockchain verification, in one record.
-   * Requires the `envelopes:read` scope.
+   * Fetch the evidence record for an envelope as JSON: envelope, signers, audit
+   * trail, and (when anchored) blockchain verification. Not the sealed bundle;
+   * see getEvidenceBundle. Requires the `envelopes:read` scope.
    */
   async getEvidence(envelopeId: string): Promise<EvidenceBundleResponse> {
     const { data } = await this.request<EvidenceBundleResponse>(
       "GET",
       `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/evidence`,
+    );
+    return data;
+  }
+
+  /**
+   * Get a single-use download link to an envelope's sealed evidence bundle ZIP,
+   * with the ZIP's SHA-256, size and signing key fingerprint. The bytes are not
+   * returned here: fetch `url` once, with no auth header. Refused with a 409 and
+   * a `code` (EvidenceBundleRefusalCode) when no bundle can be built. Requires
+   * the `envelopes:read` scope.
+   */
+  async getEvidenceBundle(envelopeId: string): Promise<EvidenceBundleLinkResponse> {
+    const { data } = await this.request<EvidenceBundleLinkResponse>(
+      "GET",
+      `/api/v1/envelopes/${encodeURIComponent(envelopeId)}/evidence/bundle`,
     );
     return data;
   }
