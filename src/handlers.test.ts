@@ -89,7 +89,7 @@ describe("TOOLS", () => {
     for (const code of ["ENVELOPE_NOT_COMPLETED", "BLIND_CUSTODY", "DOCUMENT_DESTROYED"]) {
       expect(tool?.description).toContain(code);
     }
-    expect(tool?.annotations.readOnlyHint).toBe(true);
+    expect(tool?.annotations.readOnlyHint).toBe(false);
   });
 
   it("should say analyze_document sends the document to server-side AI and needs per-document consent", () => {

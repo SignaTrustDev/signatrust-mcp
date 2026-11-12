@@ -460,7 +460,8 @@ export const TOOLS = [
     },
     annotations: {
       title: "Get Evidence Bundle (download link)",
-      readOnlyHint: true,
+      // Not read-only: each call issues a link, holds an object and writes audit rows.
+      readOnlyHint: false,
       destructiveHint: false,
       openWorldHint: true,
     },

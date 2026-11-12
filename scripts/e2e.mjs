@@ -202,7 +202,6 @@ const expectedReadOnly = [
   "download_document",
   "get_envelope",
   "get_evidence",
-  "get_evidence_bundle",
   "list_envelopes",
   "list_templates",
   "verify_blockchain",
