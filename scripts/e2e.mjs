@@ -162,6 +162,7 @@ const expectedTools = [
   "list_envelopes",
   "get_envelope",
   "create_envelope",
+  "send_envelope",
   "void_envelope",
   "list_templates",
   "upload_document",
@@ -169,6 +170,7 @@ const expectedTools = [
   "analyze_document",
   "verify_blockchain",
   "get_evidence",
+  "get_evidence_bundle",
 ];
 const listedNames = toolsList.map((t) => t.name);
 const allPresent = expectedTools.every((n) => listedNames.includes(n));
@@ -197,10 +199,10 @@ const readOnlyTools = toolsList
   .map((t) => t.name)
   .sort();
 const expectedReadOnly = [
-  "analyze_document",
   "download_document",
   "get_envelope",
   "get_evidence",
+  "get_evidence_bundle",
   "list_envelopes",
   "list_templates",
   "verify_blockchain",
@@ -304,6 +306,23 @@ async function toolCall(id, name, args, { timeoutMs = LIVE ? 15000 : 5000 } = {}
 
 // verify_blockchain on fake id
 {
+  // get_evidence_bundle — the single-use link to the sealed bundle. Fake key: rejected.
+  // Live: a fake id is a 404 (the same access as get_evidence).
+  {
+    const bundle = await toolCall(260, "get_evidence_bundle", { envelopeId: "env_fake" });
+    const text = bundle?.content?.[0]?.text ?? "";
+    const ok = LIVE
+      ? bundle?.isError === true && /not found/i.test(text)
+      : bundle?.isError === true && (/Authentication failed/.test(text) || /Forbidden/.test(text));
+    record(
+      LIVE
+        ? "get_evidence_bundle with fake envelope id → 404"
+        : "get_evidence_bundle with fake key → fake key rejected (401 or 403)",
+      ok ? "pass" : "fail",
+      ok ? `"${text.slice(0, 60)}"` : JSON.stringify(bundle),
+    );
+  }
+
   const result = await toolCall(203, "verify_blockchain", { envelopeId: "env_fake" });
   if (!LIVE) {
     const rejected =
