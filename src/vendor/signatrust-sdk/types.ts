@@ -264,7 +264,8 @@ export interface EvidenceBundleLinkResponse {
  * The `code` on a 409 from GET /api/v1/envelopes/{id}/evidence/bundle
  * (V1EvidenceBundleRefusalCode in contract/agent-contract.json).
  */
-export type EvidenceBundleRefusalCode = "ENVELOPE_NOT_COMPLETED" | "BLIND_CUSTODY" | "DOCUMENT_DESTROYED";
+export const EVIDENCE_BUNDLE_REFUSAL_CODES = ["ENVELOPE_NOT_COMPLETED", "BLIND_CUSTODY", "DOCUMENT_DESTROYED"] as const;
+export type EvidenceBundleRefusalCode = (typeof EVIDENCE_BUNDLE_REFUSAL_CODES)[number];
 
 // =============================================================================
 // AI Analysis

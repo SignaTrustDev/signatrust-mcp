@@ -9,6 +9,7 @@ import {
   SIGNER_ROLES,
   DELIVERY_METHODS,
   SECURITY_LEVELS,
+  EVIDENCE_BUNDLE_REFUSAL_CODES,
 } from "./types.js";
 
 // The canonical contract, synced from signatrust_new (contract/agent-contract.json).
@@ -16,6 +17,7 @@ import {
 // signatrust_new issue #2331 for the exposure-curation follow-up.
 interface ContractSnapshot {
   enums: Record<string, string[]>;
+  discriminators: Record<string, string[]>;
 }
 
 const snapshot: ContractSnapshot = JSON.parse(
@@ -37,5 +39,12 @@ describe("SDK enum conformance to the canonical contract", () => {
     // A mismatch means the backend enum changed and this vendored copy is stale —
     // resync from signatrust_new, do not edit the numbers to force green.
     expect([...tuple].sort()).toEqual([...snapshot.enums[name]].sort());
+  });
+
+  // get_evidence_bundle refuses with exactly the hosted connector's codes (Signatrust_v4 #3641).
+  it("should keep the evidence-bundle refusal codes in sync with V1EvidenceBundleRefusalCode", () => {
+    expect([...EVIDENCE_BUNDLE_REFUSAL_CODES].sort()).toEqual(
+      [...snapshot.discriminators.V1EvidenceBundleRefusalCode].sort(),
+    );
   });
 });
