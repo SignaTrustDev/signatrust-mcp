@@ -18,7 +18,11 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm ci
+      # OIDC trusted publishing needs npm 11.5.1 or later; Node 20 ships npm 10.
+      - run: npm install -g npm@^11.5.1
+
+      # Same install as ci.yml: `npm ci` hits the rollup optional-deps bug there.
+      - run: rm -f package-lock.json && npm install
 
       - run: npm run typecheck
 
